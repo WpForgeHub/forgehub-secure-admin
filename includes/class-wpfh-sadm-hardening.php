@@ -48,6 +48,17 @@ final class WPFH_SADM_Hardening {
 
 		// 5. REST API user enumeration protection (Unauthenticated requests)
 		add_filter( 'rest_authentication_errors', array( $this, 'protect_rest_user_endpoint' ) );
+
+		// 6. Zero-JS Honeypot protection
+		if ( ! empty( $settings['honeypot_enabled'] ) ) {
+			add_action( 'login_form', array( $this, 'render_honeypot_field' ) );
+			add_filter( 'authenticate', array( $this, 'validate_honeypot_on_authenticate' ), 5, 3 );
+		}
+
+		// 7. Lost password rate limiter against bot spam
+		if ( ! empty( $settings['lost_password_limit'] ) ) {
+			add_action( 'lostpassword_post', array( $this, 'rate_limit_lost_password' ) );
+		}
 	}
 
 	/**
@@ -124,5 +135,67 @@ final class WPFH_SADM_Hardening {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Render zero-JS honeypot field in login form.
+	 */
+	public function render_honeypot_field() {
+		?>
+		<p style="display:none !important; position:absolute; left:-9999px;" aria-hidden="true">
+			<label for="wpfh_sadm_hp"><?php esc_html_e( 'Leave this field empty', 'forgehub-secure-admin' ); ?></label>
+			<input type="text" name="wpfh_sadm_hp" id="wpfh_sadm_hp" value="" tabindex="-1" autocomplete="off" />
+		</p>
+		<?php
+	}
+
+	/**
+	 * Inspect honeypot during authentication. If filled, reject login immediately without processing password.
+	 *
+	 * @param WP_User|WP_Error|null $user     User object or error.
+	 * @param string                $username Username or email.
+	 * @param string                $password Plaintext password.
+	 * @return WP_User|WP_Error
+	 */
+	public function validate_honeypot_on_authenticate( $user, $username, $password ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$honeypot = isset( $_POST['wpfh_sadm_hp'] ) ? sanitize_text_field( wp_unslash( $_POST['wpfh_sadm_hp'] ) ) : '';
+		if ( '' !== $honeypot ) {
+			return new WP_Error(
+				'wpfh_sadm_honeypot_triggered',
+				esc_html__( 'Spam or automated bot submission detected.', 'forgehub-secure-admin' )
+			);
+		}
+
+		return $user;
+	}
+
+	/**
+	 * Rate limit lost password requests on lostpassword_post to prevent password reset bot spam.
+	 *
+	 * @param WP_Error|null $errors Error object.
+	 */
+	public function rate_limit_lost_password( $errors = null ) {
+		$ip         = wpfh_sadm_get_client_ip();
+		$trans_key  = 'wpfh_sadm_lp_' . md5( $ip );
+		$attempts   = (int) get_transient( $trans_key );
+		$max_resets = 3;
+		$window_sec = 900; // 15 minutes
+
+		if ( $attempts >= $max_resets ) {
+			$msg = esc_html__( 'Too many password reset requests from this IP address. Please wait 15 minutes before trying again.', 'forgehub-secure-admin' );
+			if ( is_wp_error( $errors ) ) {
+				$errors->add( 'wpfh_sadm_lost_password_throttled', $msg );
+			} else {
+				wp_die(
+					esc_html( $msg ),
+					esc_html__( 'Too Many Requests', 'forgehub-secure-admin' ),
+					array( 'response' => 429 )
+				);
+			}
+			return;
+		}
+
+		set_transient( $trans_key, $attempts + 1, $window_sec );
 	}
 }

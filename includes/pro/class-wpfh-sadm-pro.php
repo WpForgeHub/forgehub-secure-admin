@@ -28,6 +28,7 @@ final class WPFH_SADM_Pro {
 		add_action( 'personal_options_update', array( $this, 'handle_generate_recovery_codes' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'handle_generate_recovery_codes' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_idle_logout_script' ) );
+		add_action( 'admin_post_wpfh_sadm_export_activity_csv', array( $this, 'export_activity_csv' ) );
 	}
 
 	/**
@@ -190,5 +191,57 @@ final class WPFH_SADM_Pro {
 		";
 
 		wp_add_inline_script( 'wp-util', $inline_js );
+	}
+
+	/**
+	 * Export login activity logs to CSV format (Pro audit log export).
+	 */
+	public function export_activity_csv() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized access.', 'forgehub-secure-admin' ) );
+		}
+
+		check_admin_referer( 'wpfh_sadm_export_csv', 'wpfh_sadm_csv_nonce' );
+
+		$logs = get_option( 'wpfh_sadm_activity_logs', array() );
+		if ( ! is_array( $logs ) ) {
+			$logs = array();
+		}
+
+		header( 'Content-Type: text/csv; charset=UTF-8' );
+		header( 'Content-Disposition: attachment; filename=wpfh-sadm-login-activity-' . gmdate( 'Y-m-d' ) . '.csv' );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		$output = fopen( 'php://output', 'w' );
+		fputcsv( $output, array( 'Timestamp', 'Date/Time (UTC)', 'Username', 'IP Address', 'Status' ) );
+
+		foreach ( $logs as $entry ) {
+			$time     = isset( $entry['time'] ) ? absint( $entry['time'] ) : time();
+			$username = isset( $entry['username'] ) ? sanitize_text_field( $entry['username'] ) : '';
+			$ip       = isset( $entry['ip'] ) ? sanitize_text_field( $entry['ip'] ) : '';
+			$status   = isset( $entry['status'] ) ? sanitize_key( $entry['status'] ) : '';
+
+			fputcsv( $output, array(
+				$time,
+				gmdate( 'Y-m-d H:i:s', $time ),
+				$username,
+				$ip,
+				$status,
+			) );
+		}
+
+		fclose( $output );
+		exit;
+	}
+
+	/**
+	 * Trigger IP blacklist action hook for external firewalls or security audit modules.
+	 *
+	 * @param string $ip Offending IP address.
+	 */
+	public function blacklist_ip( $ip ) {
+		$sanitized_ip = sanitize_text_field( $ip );
+		do_action( 'wpfh_sadm_ip_blacklisted', $sanitized_ip );
 	}
 }

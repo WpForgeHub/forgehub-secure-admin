@@ -25,6 +25,8 @@ final class WPFH_SADM_Admin {
 		add_filter( 'plugin_action_links_' . plugin_basename( WPFH_SADM_FILE ), array( $this, 'add_action_links' ) );
 		add_action( 'admin_init', array( $this, 'handle_save_settings' ) );
 		add_action( 'admin_post_wpfh_sadm_unlock_ip', array( $this, 'handle_unlock_ip' ) );
+		add_action( 'admin_post_wpfh_sadm_clear_activity_logs', array( $this, 'handle_clear_activity_logs' ) );
+		add_action( 'admin_notices', array( $this, 'maybe_render_default_admin_notice' ) );
 	}
 
 	/**
@@ -79,6 +81,8 @@ final class WPFH_SADM_Admin {
 		$current['hide_login_slug']      = WPFH_SADM_Hide_Login::sanitize_slug( sanitize_text_field( wp_unslash( $_POST['hide_login_slug'] ?? '' ) ) );
 		$current['security_headers']     = ! empty( $_POST['security_headers'] ) ? 1 : 0;
 		$current['disable_file_editor']  = ! empty( $_POST['disable_file_editor'] ) ? 1 : 0;
+		$current['honeypot_enabled']     = ! empty( $_POST['honeypot_enabled'] ) ? 1 : 0;
+		$current['lost_password_limit']  = ! empty( $_POST['lost_password_limit'] ) ? 1 : 0;
 
 		// Pro settings (if premium)
 		if ( function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) {
@@ -132,6 +136,49 @@ final class WPFH_SADM_Admin {
 	}
 
 	/**
+	 * Handle clearing of the login activity log.
+	 */
+	public function handle_clear_activity_logs() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized access.', 'forgehub-secure-admin' ) );
+		}
+
+		check_admin_referer( 'wpfh_sadm_clear_activity', 'wpfh_sadm_clear_nonce' );
+
+		delete_option( 'wpfh_sadm_activity_logs' );
+
+		wp_safe_redirect( add_query_arg( array(
+			'page'    => 'forgehub-secure-admin',
+			'tab'     => 'activity',
+			'cleared' => '1',
+		), admin_url( 'options-general.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Display security notice if default 'admin' account exists and has administrator capabilities.
+	 */
+	public function maybe_render_default_admin_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( username_exists( 'admin' ) ) {
+			$admin_user = get_user_by( 'login', 'admin' );
+			if ( $admin_user && in_array( 'administrator', (array) $admin_user->roles, true ) ) {
+				?>
+				<div class="notice notice-warning is-dismissible">
+					<p>
+						<strong><?php esc_html_e( 'Security Alert (ForgeHub Secure Admin Guard):', 'forgehub-secure-admin' ); ?></strong>
+						<?php esc_html_e( ' A user account with the username "admin" was detected with Administrator privileges. Automated bots frequently target default admin usernames. We strongly recommend creating a new administrator account with a unique username and deleting or demoting the default "admin" account.', 'forgehub-secure-admin' ); ?>
+					</p>
+				</div>
+				<?php
+			}
+		}
+	}
+
+	/**
 	 * Render the plugin settings page.
 	 */
 	public function render_settings_page() {
@@ -170,6 +217,15 @@ final class WPFH_SADM_Admin {
 				</div>
 			<?php endif; ?>
 
+			<?php
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			if ( isset( $_GET['cleared'] ) ) :
+				?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e( 'Login activity log cleared successfully.', 'forgehub-secure-admin' ); ?></p>
+				</div>
+			<?php endif; ?>
+
 			<nav class="nav-tab-wrapper wp-clearfix" style="margin-bottom: 20px;">
 				<a href="?page=forgehub-secure-admin&tab=brute_force" class="nav-tab <?php echo 'brute_force' === $active_tab ? 'nav-tab-active' : ''; ?>">
 					<?php esc_html_e( 'Brute Force Shield', 'forgehub-secure-admin' ); ?>
@@ -179,6 +235,9 @@ final class WPFH_SADM_Admin {
 				</a>
 				<a href="?page=forgehub-secure-admin&tab=hardening" class="nav-tab <?php echo 'hardening' === $active_tab ? 'nav-tab-active' : ''; ?>">
 					<?php esc_html_e( 'WordPress Hardening', 'forgehub-secure-admin' ); ?>
+				</a>
+				<a href="?page=forgehub-secure-admin&tab=activity" class="nav-tab <?php echo 'activity' === $active_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'Login Activity Log', 'forgehub-secure-admin' ); ?>
 				</a>
 				<a href="?page=forgehub-secure-admin&tab=logs" class="nav-tab <?php echo 'logs' === $active_tab ? 'nav-tab-active' : ''; ?>">
 					<?php esc_html_e( 'Lockout Logs & Audit', 'forgehub-secure-admin' ); ?>
@@ -375,6 +434,24 @@ final class WPFH_SADM_Admin {
 									</label>
 								</td>
 							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Zero-JS Honeypot', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="honeypot_enabled" value="1" <?php checked( $settings['honeypot_enabled'], 1 ); ?> />
+										<?php esc_html_e( 'Trap automated login bots with an invisible honeypot field', 'forgehub-secure-admin' ); ?>
+									</label>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Lost Password Rate Limiter', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="lost_password_limit" value="1" <?php checked( $settings['lost_password_limit'], 1 ); ?> />
+										<?php esc_html_e( 'Throttle password reset requests to prevent email spam and user enumeration', 'forgehub-secure-admin' ); ?>
+									</label>
+								</td>
+							</tr>
 							<?php if ( $is_pro ) : ?>
 								<tr>
 									<th scope="row"><?php esc_html_e( 'Bad Bot Blocker', 'forgehub-secure-admin' ); ?></th>
@@ -413,6 +490,113 @@ final class WPFH_SADM_Admin {
 								</tr>
 							<?php endif; ?>
 						</table>
+
+					<?php elseif ( 'activity' === $active_tab ) : ?>
+						<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+							<div>
+								<h2 style="margin: 0; color: #0f172a;">
+									<?php esc_html_e( 'Login Activity Log', 'forgehub-secure-admin' ); ?>
+								</h2>
+								<p style="color: #64748b; margin: 4px 0 0 0;">
+									<?php esc_html_e( 'Real-time record of all login attempts: successful authentications, failed attempts, and brute force lockouts.', 'forgehub-secure-admin' ); ?>
+								</p>
+							</div>
+							<div style="display: flex; gap: 8px; align-items: center;">
+								<?php if ( $is_pro ) : ?>
+									<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wpfh_sadm_export_activity_csv' ), 'wpfh_sadm_export_csv', 'wpfh_sadm_csv_nonce' ) ); ?>" class="button button-secondary">
+										<span class="dashicons dashicons-download" style="font-size: 16px; vertical-align: middle; margin-right: 2px;"></span>
+										<?php esc_html_e( 'Export CSV (Audit)', 'forgehub-secure-admin' ); ?>
+									</a>
+								<?php else : ?>
+									<a href="https://wpforgehub.com/plugins/forgehub-secure-admin/" target="_blank" class="button button-secondary" title="<?php esc_attr_e( 'Available in Pro Edition', 'forgehub-secure-admin' ); ?>">
+										<span class="dashicons dashicons-lock" style="font-size: 16px; vertical-align: middle; margin-right: 2px;"></span>
+										<?php esc_html_e( 'Export CSV (Pro)', 'forgehub-secure-admin' ); ?>
+									</a>
+								<?php endif; ?>
+								<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wpfh_sadm_clear_activity_logs' ), 'wpfh_sadm_clear_activity', 'wpfh_sadm_clear_nonce' ) ); ?>" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to clear the activity log?', 'forgehub-secure-admin' ) ); ?>');">
+									<?php esc_html_e( 'Clear Log', 'forgehub-secure-admin' ); ?>
+								</a>
+							</div>
+						</div>
+
+						<?php
+						$activity_logs = get_option( 'wpfh_sadm_activity_logs', array() );
+						if ( empty( $activity_logs ) || ! is_array( $activity_logs ) ) :
+							?>
+							<p style="padding: 24px; background: #f8fafc; border-radius: 6px; color: #64748b; text-align: center;">
+								<?php esc_html_e( 'No login activity recorded yet. As users authenticate, entries will appear here.', 'forgehub-secure-admin' ); ?>
+							</p>
+						<?php else : ?>
+							<table class="wp-list-table widefat fixed striped">
+								<thead>
+									<tr>
+										<th style="width: 22%;"><?php esc_html_e( 'Date / Time', 'forgehub-secure-admin' ); ?></th>
+										<th style="width: 25%;"><?php esc_html_e( 'Attempted Username', 'forgehub-secure-admin' ); ?></th>
+										<th style="width: 23%;"><?php esc_html_e( 'IP Address', 'forgehub-secure-admin' ); ?></th>
+										<th style="width: 15%;"><?php esc_html_e( 'Status', 'forgehub-secure-admin' ); ?></th>
+										<th style="width: 15%;"><?php esc_html_e( 'Actions', 'forgehub-secure-admin' ); ?></th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php foreach ( $activity_logs as $entry ) : ?>
+										<?php
+										$entry_time   = isset( $entry['time'] ) ? absint( $entry['time'] ) : time();
+										$entry_user   = isset( $entry['username'] ) ? $entry['username'] : '';
+										$entry_ip     = isset( $entry['ip'] ) ? $entry['ip'] : '';
+										$entry_status = isset( $entry['status'] ) ? $entry['status'] : 'failed';
+										?>
+										<tr>
+											<td>
+												<strong><?php echo esc_html( date_i18n( 'Y-m-d H:i:s', $entry_time ) ); ?></strong>
+												<div style="font-size: 11px; color: #64748b;">
+													<?php
+													// translators: %s: relative time difference
+													printf( esc_html__( '%s ago', 'forgehub-secure-admin' ), esc_html( human_time_diff( $entry_time, time() ) ) );
+													?>
+												</div>
+											</td>
+											<td>
+												<?php if ( ! empty( $entry_user ) ) : ?>
+													<code><?php echo esc_html( $entry_user ); ?></code>
+												<?php else : ?>
+													<em style="color: #94a3b8;"><?php esc_html_e( '(empty)', 'forgehub-secure-admin' ); ?></em>
+												<?php endif; ?>
+											</td>
+											<td>
+												<code><?php echo esc_html( $entry_ip ); ?></code>
+											</td>
+											<td>
+												<?php if ( 'success' === $entry_status ) : ?>
+													<span style="display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #dcfce7; color: #166534;">
+														<?php esc_html_e( 'Success', 'forgehub-secure-admin' ); ?>
+													</span>
+												<?php elseif ( 'locked' === $entry_status ) : ?>
+													<span style="display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #fee2e2; color: #991b1b;">
+														<?php esc_html_e( 'Locked Out', 'forgehub-secure-admin' ); ?>
+													</span>
+												<?php else : ?>
+													<span style="display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #fef9c3; color: #854d0e;">
+														<?php esc_html_e( 'Failed', 'forgehub-secure-admin' ); ?>
+													</span>
+												<?php endif; ?>
+											</td>
+											<td>
+												<?php if ( $is_pro ) : ?>
+													<a href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'wpfh_sadm_blacklist_ip', 'ip' => $entry_ip ), admin_url( 'admin-post.php' ) ), 'wpfh_sadm_blacklist_action', 'wpfh_sadm_blacklist_nonce' ) ); ?>" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Blacklist this IP address?', 'forgehub-secure-admin' ) ); ?>');">
+														<?php esc_html_e( 'Blacklist IP', 'forgehub-secure-admin' ); ?>
+													</a>
+												<?php else : ?>
+													<span style="color: #94a3b8; font-size: 12px;">&mdash;</span>
+												<?php endif; ?>
+											</td>
+										</tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+							<p style="margin-top: 14px; font-size: 12px; color: #64748b;">
+								<?php esc_html_e( 'Free Edition circular buffer holds up to 100 recent entries. Upgrade to Pro for extended history and CSV audit export.', 'forgehub-secure-admin' ); ?>
+							</p>
+						<?php endif; ?>
 
 					<?php elseif ( 'logs' === $active_tab ) : ?>
 						<h2 style="margin-top: 0; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; color: #0f172a;">
@@ -481,7 +665,7 @@ final class WPFH_SADM_Admin {
 
 					<?php endif; ?>
 
-					<?php if ( 'logs' !== $active_tab ) : ?>
+					<?php if ( ! in_array( $active_tab, array( 'logs', 'activity' ), true ) ) : ?>
 						<p class="submit" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9;">
 							<input type="submit" class="button button-primary button-large" value="<?php esc_attr_e( 'Save Security Settings', 'forgehub-secure-admin' ); ?>" />
 						</p>

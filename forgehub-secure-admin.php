@@ -3,7 +3,7 @@
  * Plugin Name:       ForgeHub Secure Admin Guard
  * Plugin URI:        https://wpforgehub.com/plugins/forgehub-secure-admin/
  * Description:       Lightweight zero-bloat login protection with brute force rate limiting, email OTP two-factor authentication, and WordPress hardening.
- * Version:           1.1.1
+ * Version:           1.2.0
  * Author:            WPForgeHub
  * Author URI:        https://wpforgehub.com
  * License:           GPLv2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPFH_SADM_VERSION', '1.1.1' );
+define( 'WPFH_SADM_VERSION', '1.2.0' );
 define( 'WPFH_SADM_FILE', __FILE__ );
 define( 'WPFH_SADM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WPFH_SADM_URL', plugin_dir_url( __FILE__ ) );
@@ -83,6 +83,7 @@ if ( ! function_exists( 'wpfh_sadm_fs' ) ) {
 function wpfh_sadm_uninstall_cleanup() {
 	delete_option( 'wpfh_sadm_settings' );
 	delete_option( 'wpfh_sadm_lockout_logs' );
+	delete_option( 'wpfh_sadm_activity_logs' );
 }
 
 /**
@@ -107,6 +108,8 @@ function wpfh_sadm_get_settings() {
 		'hide_login_slug'      => '',
 		'security_headers'     => 0,
 		'disable_file_editor'  => 0,
+		'honeypot_enabled'     => 1,
+		'lost_password_limit'  => 1,
 		// Pro defaults
 		'pro_2fa_roles'        => array( 'administrator' ),
 		'pro_trusted_device'   => 1,

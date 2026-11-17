@@ -98,19 +98,23 @@ final class WPFH_SADM_Brute_Force {
 	 * @param string $username Username attempted.
 	 */
 	public function handle_failed_login( $username ) {
+		$ip       = wpfh_sadm_get_client_ip();
 		$settings = wpfh_sadm_get_settings();
-		if ( empty( $settings['brute_force_enabled'] ) ) {
+		$hash     = md5( $ip );
+		$lock_key = 'wpfh_sadm_lock_' . $hash;
+
+		// If IP is currently locked out, log lockout attempt
+		if ( false !== get_transient( $lock_key ) ) {
+			self::record_login( $username, 'locked', $ip );
 			return;
 		}
 
-		$ip = wpfh_sadm_get_client_ip();
-		if ( $this->is_whitelisted( $ip ) ) {
+		if ( empty( $settings['brute_force_enabled'] ) || $this->is_whitelisted( $ip ) ) {
+			self::record_login( $username, 'failed', $ip );
 			return;
 		}
 
-		$hash         = md5( $ip );
 		$att_key      = 'wpfh_sadm_att_' . $hash;
-		$lock_key     = 'wpfh_sadm_lock_' . $hash;
 		$max_attempts = max( 1, absint( $settings['max_attempts'] ) );
 		$duration     = max( 1, absint( $settings['lockout_duration'] ) ); // in minutes
 
@@ -123,15 +127,17 @@ final class WPFH_SADM_Brute_Force {
 			delete_transient( $att_key );
 
 			$this->log_lockout( $ip, $username, $duration );
+			self::record_login( $username, 'locked', $ip );
 			do_action( 'wpfh_sadm_ip_locked_out', $ip, $username, $duration );
 		} else {
 			// Keep attempt count alive for the lockout duration window
 			set_transient( $att_key, $attempts, $duration * 60 );
+			self::record_login( $username, 'failed', $ip );
 		}
 	}
 
 	/**
-	 * Clear attempts counter on successful login.
+	 * Clear attempts counter on successful login and record activity.
 	 *
 	 * @param string  $user_login Username.
 	 * @param WP_User $user       User object.
@@ -139,6 +145,52 @@ final class WPFH_SADM_Brute_Force {
 	public function clear_attempts_on_success( $user_login, $user ) {
 		$ip = wpfh_sadm_get_client_ip();
 		delete_transient( 'wpfh_sadm_att_' . md5( $ip ) );
+		self::record_login( $user_login, 'success', $ip );
+	}
+
+	/**
+	 * Record login activity event into the circular buffer (Free max 100 entries).
+	 *
+	 * @param string $username Username attempted.
+	 * @param string $status   Activity status ('success'|'failed'|'locked').
+	 * @param string $ip       Client IP (optional).
+	 */
+	public static function record_login( $username, $status = 'success', $ip = '' ) {
+		if ( empty( $ip ) ) {
+			$ip = wpfh_sadm_get_client_ip();
+		}
+
+		$logs = get_option( 'wpfh_sadm_activity_logs', array() );
+		if ( ! is_array( $logs ) ) {
+			$logs = array();
+		}
+
+		$entry = array(
+			'time'     => time(),
+			'username' => sanitize_text_field( $username ),
+			'ip'       => sanitize_text_field( $ip ),
+			'status'   => sanitize_key( $status ),
+		);
+
+		array_unshift( $logs, $entry );
+
+		// Enforce circular buffer limit (Free max 100 entries).
+		if ( count( $logs ) > 100 ) {
+			$logs = array_slice( $logs, 0, 100 );
+		}
+
+		update_option( 'wpfh_sadm_activity_logs', $logs, false );
+	}
+
+	/**
+	 * Record a login activity attempt (alias for record_login).
+	 *
+	 * @param string $status   Activity status ('success'|'failed'|'locked').
+	 * @param string $username Username attempted.
+	 * @param string $ip       Client IP (optional).
+	 */
+	public static function log_activity( $status = 'success', $username = '', $ip = '' ) {
+		self::record_login( $username, $status, $ip );
 	}
 
 	/**

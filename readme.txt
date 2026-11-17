@@ -4,7 +4,7 @@ Tags: security, brute force, login, two factor, 2fa
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,6 +20,10 @@ Engineered with performance and strict security in mind, Secure Admin Guard prev
 
 * **Brute Force Rate Limiting**: Restrict repeated failed login attempts from malicious IP addresses. Configurable attempt limits and lockout windows.
 * **Email Two-Factor Authentication (OTP)**: Native 6-digit one-time passcodes dispatched via email to Administrator accounts upon password verification.
+* **Zero-JS Honeypot**: Invisible honeypot trap on login form that instantly aborts bot submissions without password processing.
+* **Lost Password Rate Limiter**: Rate-limits password reset requests to stop bot flood and username enumeration.
+* **Default Admin Detector**: Security warning notice if an insecure default "admin" account exists with administrator capabilities.
+* **Login Activity Log**: Circular buffer tracking the last 100 login attempts (success, failed, and locked out).
 * **IP Whitelist**: Safeguard your own IP address from accidental lockouts.
 * **Generic Login Errors**: Prevent username enumeration by masking detailed error messages on failed logins.
 * **XML-RPC Blocker**: Completely deactivate `xmlrpc.php` to neutralize amplification attacks and brute-force backdoors.
@@ -37,6 +41,7 @@ Engineered with performance and strict security in mind, Secure Admin Guard prev
 * **Emergency Recovery Codes**: Generate 8 single-use emergency backup codes to ensure you never get locked out if email is unavailable.
 * **Idle Session Auto-Logout**: Automatically terminate unattended administrative sessions after a configurable period of inactivity.
 * **Lockout Activity Audit**: Comprehensive log of locked-out IP addresses, timestamps, and failed attempts with one-click manual unlock.
+* **Activity Log CSV Export & IP Blacklist Audit**: Export full login activity histories to CSV and dispatch IP blacklist actions.
 * **Bad Bot Blocker**: Block known malicious scanner and scraper User-Agents, with your own custom list.
 * **Instant Admin Login Alerts**: Receive real-time security email alerts whenever an administrator successfully authenticates.
 
@@ -60,6 +65,11 @@ No. Secure Admin Guard is built according to the WPForgeHub Zero-Bloat standard.
 
 == Changelog ==
 
+= 1.2.0 =
+* New: Zero-JS Honeypot on login form rejecting bot logins without processing password.
+* New: Lost password rate limiter on lostpassword_post to prevent password reset bot spam.
+* New: Default admin username detector warning when 'admin' account has administrator capabilities.
+* New: Login Activity Log tracking successful logins, failed attempts, and lockouts (circular buffer 100 entries in Free, CSV export and audit in Pro).
 
 = 1.1.1 =
 * Rename: plugin is now "ForgeHub Secure Admin Guard" (ForgeHub naming standard).
