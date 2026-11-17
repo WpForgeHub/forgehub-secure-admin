@@ -4,7 +4,7 @@ Tags: security, brute force, login, two factor, 2fa
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,6 +25,9 @@ Engineered with performance and strict security in mind, Secure Admin Guard prev
 * **XML-RPC Blocker**: Completely deactivate `xmlrpc.php` to neutralize amplification attacks and brute-force backdoors.
 * **Author Query Protection**: Block `/?author=N` scans that bots use to discover administrative usernames.
 * **Version Obfuscation**: Remove WordPress version generator meta tags from HTML heads and feeds.
+* **Hide Login URL**: Serve the login form only at your own secret slug; guests get a 404 on `/wp-login.php` and `/wp-admin` (AJAX, cron and REST keep working).
+* **Security Headers**: Optional X-Frame-Options, X-Content-Type-Options and Referrer-Policy headers.
+* **Disable File Editor**: Turn off the theme and plugin code editors in wp-admin.
 * **Zero Bloat & Lightweight**: Operates on native WordPress hooks and transients with zero third-party cloud dependencies.
 
 ### 🚀 Premium Features (Pro)
@@ -34,6 +37,7 @@ Engineered with performance and strict security in mind, Secure Admin Guard prev
 * **Emergency Recovery Codes**: Generate 8 single-use emergency backup codes to ensure you never get locked out if email is unavailable.
 * **Idle Session Auto-Logout**: Automatically terminate unattended administrative sessions after a configurable period of inactivity.
 * **Lockout Activity Audit**: Comprehensive log of locked-out IP addresses, timestamps, and failed attempts with one-click manual unlock.
+* **Bad Bot Blocker**: Block known malicious scanner and scraper User-Agents, with your own custom list.
 * **Instant Admin Login Alerts**: Receive real-time security email alerts whenever an administrator successfully authenticates.
 
 == Frequently Asked Questions ==
@@ -55,6 +59,12 @@ No. Secure Admin Guard is built according to the WPForgeHub Zero-Bloat standard.
 1. Secure Admin Guard main settings dashboard with Brute Force, Two-Factor Authentication, and Hardening controls.
 
 == Changelog ==
+
+= 1.1.0 =
+* New: Hide Login URL with custom slug.
+* New: Security headers toggle.
+* New: Disable theme/plugin file editor toggle.
+* New (Pro): Bad bot User-Agent blocker.
 
 = 1.0.0 =
 * Initial public release with Brute Force Limiter, Email 2FA OTP, and WordPress Hardening suite.

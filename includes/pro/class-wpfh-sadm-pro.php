@@ -22,11 +22,32 @@ final class WPFH_SADM_Pro {
 
 	private function __construct() {
 		add_action( 'wp_login', array( $this, 'maybe_send_login_alert' ), 20, 2 );
+		add_action( 'init', array( $this, 'maybe_block_bad_bots' ), 1 );
 		add_action( 'show_user_profile', array( $this, 'render_recovery_codes_section' ) );
 		add_action( 'edit_user_profile', array( $this, 'render_recovery_codes_section' ) );
 		add_action( 'personal_options_update', array( $this, 'handle_generate_recovery_codes' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'handle_generate_recovery_codes' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_idle_logout_script' ) );
+	}
+
+	/**
+	 * Return 403 for known bad bot User-Agents.
+	 */
+	public function maybe_block_bad_bots() {
+		$settings = wpfh_sadm_get_settings();
+		if ( empty( $settings['pro_block_bad_bots'] ) || empty( $_SERVER['HTTP_USER_AGENT'] ) || wp_doing_cron() || is_user_logged_in() ) {
+			return;
+		}
+
+		$ua    = strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) );
+		$list  = array( 'sqlmap', 'nikto', 'masscan', 'acunetix', 'wpscan', 'havij', 'zgrab', 'semrushbot', 'ahrefsbot', 'mj12bot', 'dotbot', 'python-requests', 'scrapy' );
+		$extra = preg_split( '/\r\n|\r|\n/', strtolower( (string) $settings['pro_bad_bot_list'] ) );
+		foreach ( array_merge( $list, array_filter( array_map( 'trim', (array) $extra ) ) ) as $needle ) {
+			if ( '' !== $needle && false !== strpos( $ua, $needle ) ) {
+				status_header( 403 );
+				wp_die( esc_html__( 'Forbidden', 'forgehub-secure-admin' ), '', array( 'response' => 403 ) );
+			}
+		}
 	}
 
 	/**

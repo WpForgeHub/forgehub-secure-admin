@@ -2,7 +2,7 @@
 
 ![Secure Admin Guard](assets/banner-1544x500.png)
 
-[![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)](https://wpforgehub.com/plugins/forgehub-secure-admin/)
+[![Version](https://img.shields.io/badge/Version-1.1.0-blue.svg)](https://wpforgehub.com/plugins/forgehub-secure-admin/)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPLv2%20or%20later-green.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-21759b.svg)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4.svg)](https://php.net/)
@@ -20,6 +20,8 @@
 * **Brute Force Defense**: Rate-limits failed login attempts per IP address, stopping automated credential stuffing bots.
 * **Email Two-Factor Authentication (OTP)**: Dispatches secure 6-digit one-time passcodes to administrative users upon password validation.
 * **WordPress Hardening**: Disables `xmlrpc.php`, neutralizes author query user enumeration (`/?author=1`), and masks login failure messages.
+* **Hide Login URL**: Custom login slug; `/wp-login.php` and `/wp-admin` return 404 for guests.
+* **Security Headers & File Editor Lock**: One-click header hardening and disabled theme/plugin editors.
 * **Zero Server Bloat**: Built cleanly with native WordPress hooks and transients—no background daemons, external telemetry, or unnecessary database bloat.
 
 ---

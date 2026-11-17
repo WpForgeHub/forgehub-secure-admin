@@ -3,7 +3,7 @@
  * Plugin Name:       Secure Admin Guard
  * Plugin URI:        https://wpforgehub.com/plugins/forgehub-secure-admin/
  * Description:       Lightweight zero-bloat login protection with brute force rate limiting, email OTP two-factor authentication, and WordPress hardening.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Author:            WPForgeHub
  * Author URI:        https://wpforgehub.com
  * License:           GPLv2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPFH_SADM_VERSION', '1.0.0' );
+define( 'WPFH_SADM_VERSION', '1.1.0' );
 define( 'WPFH_SADM_FILE', __FILE__ );
 define( 'WPFH_SADM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WPFH_SADM_URL', plugin_dir_url( __FILE__ ) );
@@ -104,12 +104,17 @@ function wpfh_sadm_get_settings() {
 		'disable_xmlrpc'       => 1,
 		'block_author_query'   => 1,
 		'hide_wp_version'      => 1,
+		'hide_login_slug'      => '',
+		'security_headers'     => 0,
+		'disable_file_editor'  => 0,
 		// Pro defaults
 		'pro_2fa_roles'        => array( 'administrator' ),
 		'pro_trusted_device'   => 1,
 		'pro_idle_logout'      => 0,
 		'pro_idle_timeout'     => 15, // minutes
 		'pro_login_alert'      => 0,
+		'pro_block_bad_bots'   => 0,
+		'pro_bad_bot_list'     => '',
 	);
 
 	$saved = get_option( 'wpfh_sadm_settings', array() );
@@ -164,6 +169,7 @@ final class WPFH_Secure_Admin {
 		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-brute-force.php';
 		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-email-2fa.php';
 		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-hardening.php';
+		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-hide-login.php';
 		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-admin.php';
 
 		// Load Pro features if available
@@ -177,6 +183,7 @@ final class WPFH_Secure_Admin {
 		WPFH_SADM_Brute_Force::get_instance();
 		WPFH_SADM_Email_2FA::get_instance();
 		WPFH_SADM_Hardening::get_instance();
+		WPFH_SADM_Hide_Login::get_instance();
 		WPFH_SADM_Admin::get_instance();
 
 		$pro_class = 'WPFH_SADM_Pro';

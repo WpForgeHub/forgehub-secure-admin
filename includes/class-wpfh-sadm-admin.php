@@ -63,6 +63,9 @@ final class WPFH_SADM_Admin {
 		$current['disable_xmlrpc']       = ! empty( $_POST['disable_xmlrpc'] ) ? 1 : 0;
 		$current['block_author_query']   = ! empty( $_POST['block_author_query'] ) ? 1 : 0;
 		$current['hide_wp_version']      = ! empty( $_POST['hide_wp_version'] ) ? 1 : 0;
+		$current['hide_login_slug']      = WPFH_SADM_Hide_Login::sanitize_slug( sanitize_text_field( wp_unslash( $_POST['hide_login_slug'] ?? '' ) ) );
+		$current['security_headers']     = ! empty( $_POST['security_headers'] ) ? 1 : 0;
+		$current['disable_file_editor']  = ! empty( $_POST['disable_file_editor'] ) ? 1 : 0;
 
 		// Pro settings (if premium)
 		if ( function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) {
@@ -70,6 +73,8 @@ final class WPFH_SADM_Admin {
 			$current['pro_idle_logout']    = ! empty( $_POST['pro_idle_logout'] ) ? 1 : 0;
 			$current['pro_idle_timeout']   = max( 1, min( 240, absint( $_POST['pro_idle_timeout'] ?? 15 ) ) );
 			$current['pro_login_alert']    = ! empty( $_POST['pro_login_alert'] ) ? 1 : 0;
+			$current['pro_block_bad_bots'] = ! empty( $_POST['pro_block_bad_bots'] ) ? 1 : 0;
+			$current['pro_bad_bot_list']   = sanitize_textarea_field( wp_unslash( $_POST['pro_bad_bot_list'] ?? '' ) );
 
 			if ( isset( $_POST['pro_2fa_roles'] ) && is_array( $_POST['pro_2fa_roles'] ) ) {
 				$current['pro_2fa_roles'] = array_map( 'sanitize_key', $_POST['pro_2fa_roles'] );
@@ -331,7 +336,46 @@ final class WPFH_SADM_Admin {
 									</label>
 								</td>
 							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Hide Login URL', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<code><?php echo esc_html( trailingslashit( home_url() ) ); ?></code>
+									<input type="text" name="hide_login_slug" value="<?php echo esc_attr( $settings['hide_login_slug'] ); ?>" class="regular-text" placeholder="my-secret-login" autocomplete="off" />
+									<p class="description"><?php esc_html_e( 'Leave empty to disable. When set, guests get a 404 on /wp-login.php and /wp-admin, and the login form lives only at this address. Bookmark it before saving.', 'forgehub-secure-admin' ); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Security Headers', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="security_headers" value="1" <?php checked( $settings['security_headers'], 1 ); ?> />
+										<?php esc_html_e( 'Send X-Frame-Options, X-Content-Type-Options and Referrer-Policy headers', 'forgehub-secure-admin' ); ?>
+									</label>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Disable File Editor', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="disable_file_editor" value="1" <?php checked( $settings['disable_file_editor'], 1 ); ?> />
+										<?php esc_html_e( 'Turn off the theme and plugin code editors in wp-admin', 'forgehub-secure-admin' ); ?>
+									</label>
+								</td>
+							</tr>
 							<?php if ( $is_pro ) : ?>
+								<tr>
+									<th scope="row"><?php esc_html_e( 'Bad Bot Blocker', 'forgehub-secure-admin' ); ?></th>
+									<td>
+										<label>
+											<input type="checkbox" name="pro_block_bad_bots" value="1" <?php checked( $settings['pro_block_bad_bots'], 1 ); ?> />
+											<?php esc_html_e( 'Return 403 to known malicious scanner and scraper User-Agents', 'forgehub-secure-admin' ); ?>
+										</label>
+										<p style="margin-top: 8px;">
+											<textarea name="pro_bad_bot_list" rows="3" class="large-text" placeholder="evilbot&#10;scrapy"><?php echo esc_textarea( $settings['pro_bad_bot_list'] ); ?></textarea>
+											<span class="description"><?php esc_html_e( 'Extra User-Agent fragments, one per line (case-insensitive).', 'forgehub-secure-admin' ); ?></span>
+										</p>
+									</td>
+								</tr>
 								<tr>
 									<th scope="row"><?php esc_html_e( 'Idle Auto-Logout', 'forgehub-secure-admin' ); ?></th>
 									<td>
