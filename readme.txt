@@ -1,10 +1,10 @@
-=== Secure Admin Guard ===
+=== ForgeHub Secure Admin Guard ===
 Contributors: wpforgehub
 Tags: security, brute force, login, two factor, 2fa
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,10 @@ No. Secure Admin Guard is built according to the WPForgeHub Zero-Bloat standard.
 
 == Changelog ==
 
+
+= 1.1.1 =
+* Rename: plugin is now "ForgeHub Secure Admin Guard" (ForgeHub naming standard).
+* Fix: Plugins screen now shows a consistent "Settings" link.
 = 1.1.0 =
 * New: Hide Login URL with custom slug.
 * New: Security headers toggle.

@@ -22,8 +22,21 @@ final class WPFH_SADM_Admin {
 
 	private function __construct() {
 		add_action( 'admin_menu', array( $this, 'register_admin_menu' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( WPFH_SADM_FILE ), array( $this, 'add_action_links' ) );
 		add_action( 'admin_init', array( $this, 'handle_save_settings' ) );
 		add_action( 'admin_post_wpfh_sadm_unlock_ip', array( $this, 'handle_unlock_ip' ) );
+	}
+
+	/**
+	 * Settings link on the Plugins screen.
+	 *
+	 * @param array $links Existing action links.
+	 * @return array
+	 */
+	public function add_action_links( $links ) {
+		$settings_link = '<a href="' . esc_url( admin_url( 'options-general.php?page=forgehub-secure-admin' ) ) . '">' . esc_html__( 'Settings', 'forgehub-secure-admin' ) . '</a>';
+		array_unshift( $links, $settings_link );
+		return $links;
 	}
 
 	public function register_admin_menu() {
