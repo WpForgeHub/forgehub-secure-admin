@@ -13,6 +13,13 @@ final class WPFH_SADM_Hardening {
 
 	private static $instance = null;
 
+	/**
+	 * Whether the current request's login error should bypass generic error masking.
+	 *
+	 * @var bool
+	 */
+	private static $preserve_login_error = false;
+
 	public static function get_instance() {
 		if ( null === self::$instance ) {
 			self::$instance = new self();
@@ -25,6 +32,7 @@ final class WPFH_SADM_Hardening {
 
 		// 1. Generic login error masking (prevents username enumeration)
 		if ( ! empty( $settings['generic_login_errors'] ) ) {
+			add_filter( 'authenticate', array( $this, 'inspect_auth_error' ), 999, 3 );
 			add_filter( 'login_errors', array( $this, 'mask_login_errors' ) );
 		}
 
@@ -52,13 +60,53 @@ final class WPFH_SADM_Hardening {
 		// 6. Zero-JS Honeypot protection
 		if ( ! empty( $settings['honeypot_enabled'] ) ) {
 			add_action( 'login_form', array( $this, 'render_honeypot_field' ) );
-			add_filter( 'authenticate', array( $this, 'validate_honeypot_on_authenticate' ), 5, 3 );
+			add_filter( 'authenticate', array( $this, 'validate_honeypot_on_authenticate' ), 30, 3 );
 		}
 
-		// 7. Lost password rate limiter against bot spam
+		// 7. Lightweight zero-JS Math CAPTCHA on wp-login.php
+		if ( ! empty( $settings['math_captcha_enabled'] ) ) {
+			add_action( 'login_form', array( $this, 'render_math_captcha_field' ) );
+			add_filter( 'authenticate', array( $this, 'validate_math_captcha_on_authenticate' ), 40, 3 );
+		}
+
+		// 8. Opt-in login protection badge (disabled by default)
+		if ( ! empty( $settings['login_badge_enabled'] ) ) {
+			add_action( 'login_footer', array( $this, 'render_login_badge' ) );
+		}
+
+		// 9. Lost password rate limiter against bot spam
 		if ( ! empty( $settings['lost_password_limit'] ) ) {
 			add_action( 'lostpassword_post', array( $this, 'rate_limit_lost_password' ) );
 		}
+	}
+
+	/**
+	 * Inspect the final authentication result so lockout, CAPTCHA, honeypot, and 2FA errors are not masked.
+	 *
+	 * @param WP_User|WP_Error|null $user     Authentication result.
+	 * @param string                $username Username or email.
+	 * @param string                $password Plaintext password.
+	 * @return WP_User|WP_Error|null
+	 */
+	public function inspect_auth_error( $user, $username, $password ) {
+		if ( is_wp_error( $user ) ) {
+			$preserved_codes = array(
+				'wpfh_sadm_locked_out',
+				'wpfh_sadm_captcha_failed',
+				'wpfh_sadm_honeypot_triggered',
+				'wpfh_sadm_2fa_invalid',
+				'wpfh_sadm_2fa_expired',
+			);
+
+			foreach ( $user->get_error_codes() as $code ) {
+				if ( in_array( $code, $preserved_codes, true ) ) {
+					self::$preserve_login_error = true;
+					break;
+				}
+			}
+		}
+
+		return $user;
 	}
 
 	/**
@@ -68,8 +116,8 @@ final class WPFH_SADM_Hardening {
 	 * @return string
 	 */
 	public function mask_login_errors( $error ) {
-		// Don't mask lockout or 2FA messages
-		if ( strpos( $error, 'wpfh_sadm_locked_out' ) !== false || strpos( $error, 'verification code' ) !== false ) {
+		// Preserve plugin-generated lockout, CAPTCHA, honeypot, and 2FA messages.
+		if ( self::$preserve_login_error || strpos( $error, 'verification code' ) !== false ) {
 			return $error;
 		}
 
@@ -168,6 +216,110 @@ final class WPFH_SADM_Hardening {
 		}
 
 		return $user;
+	}
+
+	/**
+	 * Render a zero-JS, replay-proof Math CAPTCHA field on wp-login.php.
+	 */
+	public function render_math_captcha_field() {
+		$num1   = wp_rand( 1, 9 );
+		$num2   = wp_rand( 1, 9 );
+		$answer = (string) ( $num1 + $num2 );
+		$token  = strtolower( wp_generate_password( 24, false, false ) );
+
+		set_transient( 'wpfh_sadm_cap_' . $token, $answer, 15 * MINUTE_IN_SECONDS );
+		?>
+		<p class="wpfh-sadm-captcha-wrap">
+			<label for="wpfh_sadm_captcha_answer">
+				<?php
+				printf(
+					/* translators: 1: first number, 2: second number */
+					esc_html__( 'Security Check: What is %1$d + %2$d?', 'forgehub-secure-admin' ),
+					(int) $num1,
+					(int) $num2
+				);
+				?>
+			</label>
+			<input type="text" inputmode="numeric" pattern="[0-9]*" name="wpfh_sadm_captcha_answer" id="wpfh_sadm_captcha_answer" class="input" value="" size="20" autocomplete="off" required="required" />
+			<input type="hidden" name="wpfh_sadm_captcha_token" value="<?php echo esc_attr( $token ); ?>" />
+		</p>
+		<?php
+	}
+
+	/**
+	 * Validate the Math CAPTCHA on standard wp-login.php form submissions.
+	 *
+	 * @param WP_User|WP_Error|null $user     User object or error.
+	 * @param string                $username Username or email.
+	 * @param string                $password Plaintext password.
+	 * @return WP_User|WP_Error|null
+	 */
+	public function validate_math_captcha_on_authenticate( $user, $username, $password ) {
+		if ( is_wp_error( $user ) ) {
+			$priority_codes = array( 'wpfh_sadm_locked_out', 'wpfh_sadm_honeypot_triggered' );
+			foreach ( $user->get_error_codes() as $code ) {
+				if ( in_array( $code, $priority_codes, true ) ) {
+					return $user;
+				}
+			}
+		}
+
+		if ( empty( $username ) && empty( $password ) ) {
+			return $user;
+		}
+
+		if (
+			( defined( 'REST_REQUEST' ) && REST_REQUEST ) ||
+			( defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST ) ||
+			( defined( 'WP_CLI' ) && WP_CLI ) ||
+			did_action( 'wp_authenticate_application_password_errors' )
+		) {
+			return $user;
+		}
+
+		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : '';
+		// Only enforce on standard wp-login.php POST submissions (which submit 'log' or our token).
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		if ( 'POST' !== $request_method || ( ! isset( $_POST['log'] ) && ! isset( $_POST['wpfh_sadm_captcha_token'] ) ) ) {
+			return $user;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$token = isset( $_POST['wpfh_sadm_captcha_token'] ) ? sanitize_key( wp_unslash( $_POST['wpfh_sadm_captcha_token'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$answer = isset( $_POST['wpfh_sadm_captcha_answer'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['wpfh_sadm_captcha_answer'] ) ) ) : '';
+
+		if ( '' === $token || '' === $answer ) {
+			return new WP_Error(
+				'wpfh_sadm_captcha_failed',
+				esc_html__( 'Please solve the security math question to log in.', 'forgehub-secure-admin' )
+			);
+		}
+
+		$trans_key = 'wpfh_sadm_cap_' . $token;
+		$expected  = get_transient( $trans_key );
+		delete_transient( $trans_key );
+
+		if ( false === $expected || ! hash_equals( (string) $expected, (string) $answer ) ) {
+			return new WP_Error(
+				'wpfh_sadm_captcha_failed',
+				esc_html__( 'Incorrect security math answer. Please try again.', 'forgehub-secure-admin' )
+			);
+		}
+
+		return $user;
+	}
+
+	/**
+	 * Render an opt-in protection badge below the login form.
+	 */
+	public function render_login_badge() {
+		?>
+		<div class="wpfh-sadm-login-badge" style="text-align:center;margin:16px auto 0;max-width:320px;font-size:12px;color:#334155;display:flex;align-items:center;justify-content:center;gap:6px;">
+			<span class="dashicons dashicons-shield" aria-hidden="true" style="font-size:16px;width:16px;height:16px;color:#0f766e;"></span>
+			<span><?php esc_html_e( 'Protected by ForgeHub Secure Admin', 'forgehub-secure-admin' ); ?></span>
+		</div>
+		<?php
 	}
 
 	/**

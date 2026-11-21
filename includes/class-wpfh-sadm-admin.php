@@ -97,6 +97,8 @@ final class WPFH_SADM_Admin {
 			$current['security_headers']     = ! empty( $_POST['security_headers'] ) ? 1 : 0;
 			$current['disable_file_editor']  = ! empty( $_POST['disable_file_editor'] ) ? 1 : 0;
 			$current['honeypot_enabled']     = ! empty( $_POST['honeypot_enabled'] ) ? 1 : 0;
+			$current['math_captcha_enabled'] = ! empty( $_POST['math_captcha_enabled'] ) ? 1 : 0;
+			$current['login_badge_enabled']  = ! empty( $_POST['login_badge_enabled'] ) ? 1 : 0;
 			$current['lost_password_limit']  = ! empty( $_POST['lost_password_limit'] ) ? 1 : 0;
 
 			if ( $is_pro ) {
@@ -230,6 +232,39 @@ final class WPFH_SADM_Admin {
 				?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e( 'Login activity log cleared successfully.', 'forgehub-secure-admin' ); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php
+			$all_lockout_logs  = get_option( 'wpfh_sadm_lockout_logs', array() );
+			$active_locked_ips = array();
+			if ( is_array( $all_lockout_logs ) ) {
+				foreach ( $all_lockout_logs as $lock_entry ) {
+					$entry_ip = isset( $lock_entry['ip'] ) ? (string) $lock_entry['ip'] : '';
+					if ( '' !== $entry_ip && ( $lock_entry['unlock_at'] ?? 0 ) > time() && false !== get_transient( 'wpfh_sadm_lock_' . md5( $entry_ip ) ) ) {
+						$active_locked_ips[ $entry_ip ] = true;
+					}
+				}
+			}
+			$active_lockout_count = count( $active_locked_ips );
+			if ( $active_lockout_count > 0 ) :
+				?>
+				<div class="notice notice-warning">
+					<p>
+						<strong><?php esc_html_e( 'Active Lockouts:', 'forgehub-secure-admin' ); ?></strong>
+						<?php
+						printf(
+							/* translators: %d: number of currently locked out IP addresses */
+							esc_html( _n( '%d IP address is currently locked out.', '%d IP addresses are currently locked out.', $active_lockout_count, 'forgehub-secure-admin' ) ),
+							(int) $active_lockout_count
+						);
+						?>
+						<?php if ( 'logs' !== $active_tab ) : ?>
+							<a href="<?php echo esc_url( admin_url( 'options-general.php?page=forgehub-secure-admin&tab=logs' ) ); ?>" style="margin-left: 8px; font-weight: 600;">
+								<?php esc_html_e( 'View &amp; Unlock &rarr;', 'forgehub-secure-admin' ); ?>
+							</a>
+						<?php endif; ?>
+					</p>
 				</div>
 			<?php endif; ?>
 
@@ -463,6 +498,30 @@ final class WPFH_SADM_Admin {
 								</td>
 							</tr>
 							<tr>
+								<th scope="row"><?php esc_html_e( 'Login Math CAPTCHA', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="math_captcha_enabled" value="1" <?php checked( $settings['math_captcha_enabled'], 1 ); ?> />
+										<?php esc_html_e( 'Require a lightweight math question (e.g. 2 + 5) on wp-login.php', 'forgehub-secure-admin' ); ?>
+									</label>
+									<p class="description">
+										<?php esc_html_e( 'Zero-JS, replay-proof bot protection. Does not affect REST API, Application Passwords, or WP-CLI.', 'forgehub-secure-admin' ); ?>
+									</p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Login Protection Badge', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="login_badge_enabled" value="1" <?php checked( $settings['login_badge_enabled'], 1 ); ?> />
+										<?php esc_html_e( 'Show "Protected by ForgeHub Secure Admin" badge on the login screen', 'forgehub-secure-admin' ); ?>
+									</label>
+									<p class="description">
+										<?php esc_html_e( 'Optional subtle shield signature displayed below the WordPress login form (disabled by default).', 'forgehub-secure-admin' ); ?>
+									</p>
+								</td>
+							</tr>
+							<tr>
 								<th scope="row"><?php esc_html_e( 'Lost Password Rate Limiter', 'forgehub-secure-admin' ); ?></th>
 								<td>
 									<label>
@@ -646,7 +705,7 @@ final class WPFH_SADM_Admin {
 								<tbody>
 									<?php foreach ( $logs as $entry ) : ?>
 										<?php
-										$is_active = ( $entry['unlock_at'] ?? 0 ) > time();
+										$is_active = ( $entry['unlock_at'] ?? 0 ) > time() && false !== get_transient( 'wpfh_sadm_lock_' . md5( (string) ( $entry['ip'] ?? '' ) ) );
 										$unlock_url = wp_nonce_url(
 											add_query_arg( array(
 												'action' => 'wpfh_sadm_unlock_ip',

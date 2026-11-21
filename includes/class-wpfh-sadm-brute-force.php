@@ -21,9 +21,48 @@ final class WPFH_SADM_Brute_Force {
 	}
 
 	private function __construct() {
-		add_filter( 'authenticate', array( $this, 'check_lockout_before_auth' ), 20, 3 );
+		add_filter( 'authenticate', array( $this, 'check_lockout_before_auth' ), 35, 3 );
+		add_filter( 'login_message', array( $this, 'render_lockout_login_notice' ) );
 		add_action( 'wp_login_failed', array( $this, 'handle_failed_login' ) );
 		add_action( 'wp_login', array( $this, 'clear_attempts_on_success' ), 10, 2 );
+	}
+
+	/**
+	 * Display a proactive lockout notice on wp-login.php when the visitor's IP is locked out.
+	 *
+	 * @param string $message Existing login message HTML.
+	 * @return string
+	 */
+	public function render_lockout_login_notice( $message ) {
+		$settings = wpfh_sadm_get_settings();
+		if ( empty( $settings['brute_force_enabled'] ) ) {
+			return $message;
+		}
+
+		$ip = wpfh_sadm_get_client_ip();
+		if ( $this->is_whitelisted( $ip ) ) {
+			return $message;
+		}
+
+		$lock_until = get_transient( 'wpfh_sadm_lock_' . md5( $ip ) );
+		if ( false === $lock_until ) {
+			return $message;
+		}
+
+		$remaining = (int) $lock_until - time();
+		$mins      = max( 1, (int) ceil( $remaining / 60 ) );
+
+		$notice = sprintf(
+			/* translators: %d: remaining minutes of lockout */
+			esc_html__( 'Your IP address is temporarily locked out due to too many failed login attempts. Please try again in %d minute(s).', 'forgehub-secure-admin' ),
+			$mins
+		);
+
+		$banner = '<div id="wpfh-sadm-lockout-notice" class="message" style="border-left-color:#d63638;"><strong>'
+			. esc_html__( 'Login Locked:', 'forgehub-secure-admin' )
+			. '</strong> ' . $notice . '</div>';
+
+		return $message . $banner;
 	}
 
 	/**

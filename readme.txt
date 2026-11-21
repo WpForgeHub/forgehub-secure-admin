@@ -4,7 +4,7 @@ Tags: security, brute force, login, two factor, 2fa
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,8 @@ Engineered with performance and strict security in mind, Secure Admin Guard prev
 * **Brute Force Rate Limiting**: Restrict repeated failed login attempts from malicious IP addresses. Configurable attempt limits and lockout windows.
 * **Email Two-Factor Authentication (OTP)**: Native 6-digit one-time passcodes dispatched via email to Administrator accounts upon password verification.
 * **Zero-JS Honeypot**: Invisible honeypot trap on login form that instantly aborts bot submissions without password processing.
+* **Lightweight Math CAPTCHA**: Zero-JS, replay-proof arithmetic check (`2 + 5`) on `wp-login.php` (enabled by default; does not affect REST API, Application Passwords, or WP-CLI).
+* **Opt-In Login Protection Badge**: Optional "Protected by ForgeHub Secure Admin" shield signature below the login form (disabled by default).
 * **Lost Password Rate Limiter**: Rate-limits password reset requests to stop bot flood and username enumeration.
 * **Default Admin Detector**: Security warning notice if an insecure default "admin" account exists with administrator capabilities.
 * **Login Activity Log**: Circular buffer tracking the last 100 login attempts (success, failed, and locked out).
@@ -64,6 +66,12 @@ No. Secure Admin Guard is built according to the WPForgeHub Zero-Bloat standard.
 1. Secure Admin Guard main settings dashboard with Brute Force, Two-Factor Authentication, and Hardening controls.
 
 == Changelog ==
+
+= 1.3.0 =
+* New: Zero-JS, replay-proof Math CAPTCHA on wp-login.php (enabled by default, safe for REST API / WP-CLI / Application Passwords).
+* New: Opt-in "Protected by ForgeHub Secure Admin" shield badge on the login screen (disabled by default).
+* New: Proactive lockout notice banner on wp-login.php showing remaining lockout minutes before login submission, plus active lockout summary banner in wp-admin settings.
+* Fix: Generic login error masking no longer hides brute-force lockout or CAPTCHA error messages, and unlocked IPs immediately reflect as expired in Lockout Logs.
 
 = 1.2.1 =
 * Fix 2FA lockout bug, tab settings wipe, IP spoofing, Hide Login safety, and Pro recovery/blacklist/idle/CSV issues.

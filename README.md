@@ -2,7 +2,7 @@
 
 ![Secure Admin Guard](assets/banner-1544x500.png)
 
-[![Version](https://img.shields.io/badge/Version-1.2.1-blue.svg)](https://wpforgehub.com/plugins/forgehub-secure-admin/)
+[![Version](https://img.shields.io/badge/Version-1.3.0-blue.svg)](https://wpforgehub.com/plugins/forgehub-secure-admin/)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPLv2%20or%20later-green.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-21759b.svg)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4.svg)](https://php.net/)
@@ -11,7 +11,7 @@
 [![WCAG 2.1](https://img.shields.io/badge/WCAG-2.1%20AA-brightgreen.svg)](https://wpforgehub.com/)
 [![Security](https://img.shields.io/badge/Security-Admin%20Guard-red.svg)](https://wpforgehub.com/)
 
-**Secure Admin Guard** (v1.2.1) provides lightweight, high-performance administrative protection and authentication hardening for WordPress websites.
+**Secure Admin Guard** (v1.3.0) provides lightweight, high-performance administrative protection and authentication hardening for WordPress websites.
 
 ---
 
@@ -20,6 +20,8 @@
 * **Brute Force Defense**: Rate-limits failed login attempts per IP address, stopping automated credential stuffing bots.
 * **Email Two-Factor Authentication (OTP)**: Dispatches secure 6-digit one-time passcodes to administrative users upon password validation.
 * **Zero-JS Honeypot**: Invisible login trap that blocks spam bots without server strain.
+* **Lightweight Math CAPTCHA**: Zero-JS, replay-proof arithmetic security check on `wp-login.php` (enabled by default).
+* **Clear Lockout Feedback & Opt-In Login Badge**: Proactive lockout notices on `wp-login.php`, active lockout summary in wp-admin, and an optional "Protected by ForgeHub Secure Admin" login badge.
 * **Lost Password Protection**: Rate limiter on password resets prevents email flood attacks.
 * **Default Admin Account Detector**: Real-time admin notices warning when an insecure 'admin' user has Administrator capabilities.
 * **Login Activity Log**: Circular buffer tracking recent logins (100 in Free, full CSV export and audit in Pro).
