@@ -213,8 +213,9 @@ final class WPFH_SADM_Pro {
 		header( 'Pragma: no-cache' );
 		header( 'Expires: 0' );
 
-		$output = fopen( 'php://output', 'w' );
-		fputcsv( $output, array( 'Timestamp', 'Date/Time (UTC)', 'Username', 'IP Address', 'Status' ) );
+		$rows = array(
+			array( 'Timestamp', 'Date/Time (UTC)', 'Username', 'IP Address', 'Status' ),
+		);
 
 		foreach ( $logs as $entry ) {
 			$time     = isset( $entry['time'] ) ? absint( $entry['time'] ) : time();
@@ -222,16 +223,26 @@ final class WPFH_SADM_Pro {
 			$ip       = isset( $entry['ip'] ) ? sanitize_text_field( $entry['ip'] ) : '';
 			$status   = isset( $entry['status'] ) ? sanitize_key( $entry['status'] ) : '';
 
-			fputcsv( $output, array(
-				$time,
+			$rows[] = array(
+				(string) $time,
 				gmdate( 'Y-m-d H:i:s', $time ),
 				$username,
 				$ip,
 				$status,
-			) );
+			);
 		}
 
-		fclose( $output );
+		foreach ( $rows as $row ) {
+			$escaped = array_map(
+				static function ( $field ) {
+					return '"' . str_replace( '"', '""', (string) $field ) . '"';
+				},
+				$row
+			);
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw CSV download stream with text/csv Content-Type header.
+			echo implode( ',', $escaped ) . "\r\n";
+		}
+
 		exit;
 	}
 
