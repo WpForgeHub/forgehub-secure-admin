@@ -2,7 +2,7 @@
 
 ![Secure Admin Guard](assets/banner-1544x500.png)
 
-[![Version](https://img.shields.io/badge/Version-1.2.0-blue.svg)](https://wpforgehub.com/plugins/forgehub-secure-admin/)
+[![Version](https://img.shields.io/badge/Version-1.2.1-blue.svg)](https://wpforgehub.com/plugins/forgehub-secure-admin/)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPLv2%20or%20later-green.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-21759b.svg)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4.svg)](https://php.net/)
@@ -11,7 +11,7 @@
 [![WCAG 2.1](https://img.shields.io/badge/WCAG-2.1%20AA-brightgreen.svg)](https://wpforgehub.com/)
 [![Security](https://img.shields.io/badge/Security-Admin%20Guard-red.svg)](https://wpforgehub.com/)
 
-**Secure Admin Guard** (v1.2.0) provides lightweight, high-performance administrative protection and authentication hardening for WordPress websites.
+**Secure Admin Guard** (v1.2.1) provides lightweight, high-performance administrative protection and authentication hardening for WordPress websites.
 
 ---
 

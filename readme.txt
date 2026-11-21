@@ -4,7 +4,7 @@ Tags: security, brute force, login, two factor, 2fa
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ No. Secure Admin Guard is built according to the WPForgeHub Zero-Bloat standard.
 1. Secure Admin Guard main settings dashboard with Brute Force, Two-Factor Authentication, and Hardening controls.
 
 == Changelog ==
+
+= 1.2.1 =
+* Fix 2FA lockout bug, tab settings wipe, IP spoofing, Hide Login safety, and Pro recovery/blacklist/idle/CSV issues.
 
 = 1.2.0 =
 * New: Zero-JS Honeypot on login form rejecting bot logins without processing password.
