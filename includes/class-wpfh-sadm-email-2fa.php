@@ -23,6 +23,7 @@ final class WPFH_SADM_Email_2FA {
 	private function __construct() {
 		// Hook late in authentication after standard password validation (priority 30)
 		add_filter( 'authenticate', array( $this, 'intercept_login_for_2fa' ), 30, 3 );
+		add_action( 'login_form_wpfh_sadm_2fa', array( $this, 'handle_2fa_verification' ) );
 		add_action( 'login_form_wpfh_sadm_resend', array( $this, 'handle_resend_otp' ) );
 	}
 
@@ -115,83 +116,27 @@ final class WPFH_SADM_Email_2FA {
 		}
 
 		// Check if trusted browser device cookie is valid (Pro)
-		if ( $this->is_device_trusted( $user->ID ) ) {
+		$settings = wpfh_sadm_get_settings();
+		if ( ! empty( $settings['pro_trusted_device'] ) && $this->is_device_trusted( $user->ID ) ) {
 			return $user;
 		}
 
-		// Case A: User has submitted the 2FA verification form
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing
-		if ( isset( $_POST['wpfh_sadm_otp_code'] ) && isset( $_POST['wpfh_sadm_token'] ) ) {
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing
-			$token = sanitize_text_field( wp_unslash( $_POST['wpfh_sadm_token'] ) );
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing
-			$code  = trim( sanitize_text_field( wp_unslash( $_POST['wpfh_sadm_otp_code'] ) ) );
-
-			$transient_key = 'wpfh_sadm_otp_' . $token;
-			$data          = get_transient( $transient_key );
-
-			if ( false === $data || empty( $data['user_id'] ) || (int) $data['user_id'] !== (int) $user->ID ) {
-				return new WP_Error(
-					'wpfh_sadm_expired_otp',
-					esc_html__( 'The verification session has expired. Please log in again.', 'forgehub-secure-admin' )
-				);
-			}
-
-			// Verify submitted code
-			$valid = false;
-
-			// 1. Check primary OTP code
-			if ( ! empty( $data['otp_hash'] ) && wp_check_password( $code, $data['otp_hash'] ) ) {
-				$valid = true;
-			}
-
-			// 2. Pro: Check emergency backup recovery codes
-			if ( ! $valid && function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) {
-				$backup_codes = get_user_meta( $user->ID, 'wpfh_sadm_backup_codes', true );
-				if ( is_array( $backup_codes ) ) {
-					foreach ( $backup_codes as $idx => $stored_hash ) {
-						if ( wp_check_password( $code, $stored_hash ) ) {
-							$valid = true;
-							unset( $backup_codes[ $idx ] );
-							update_user_meta( $user->ID, 'wpfh_sadm_backup_codes', array_values( $backup_codes ) );
-							break;
-						}
-					}
-				}
-			}
-
-			if ( ! $valid ) {
-				return new WP_Error(
-					'wpfh_sadm_invalid_otp',
-					esc_html__( 'Invalid verification code. Please check your email and try again.', 'forgehub-secure-admin' )
-				);
-			}
-
-			// Valid OTP: cleanup transient
-			delete_transient( $transient_key );
-
-			// Pro: handle "Remember this device"
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing
-			if ( ! empty( $_POST['wpfh_sadm_trust_device'] ) && function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) {
-				$this->set_trusted_device_cookie( $user->ID );
-			}
-
-			// Trigger success action
-			do_action( 'wpfh_sadm_2fa_success', $user );
-
-			return $user;
-		}
-
-		// Case B: Initial login credentials verified, stage 2FA OTP
+		// Initial login credentials verified, stage 2FA OTP challenge.
 		$otp   = sprintf( '%06d', wp_rand( 100000, 999999 ) );
-		$token = wp_generate_password( 32, false );
+		$token = wp_generate_password( 32, false, false );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$redirect_to = isset( $_REQUEST['redirect_to'] ) ? esc_url_raw( wp_unslash( $_REQUEST['redirect_to'] ) ) : admin_url();
 
 		$session_data = array(
-			'user_id'   => $user->ID,
-			'otp_hash'  => wp_hash_password( (string) $otp ),
-			'created'   => time(),
+			'user_id'     => $user->ID,
+			'otp_hash'    => wp_hash_password( (string) $otp ),
+			'created'     => time(),
+			'last_sent'   => time(),
+			'attempts'    => 0,
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing
-			'remember'  => ! empty( $_POST['rememberme'] ) ? 1 : 0,
+			'remember'    => ! empty( $_POST['rememberme'] ) ? 1 : 0,
+			'redirect_to' => $redirect_to,
 		);
 
 		// Store for 10 minutes (600 seconds)
@@ -202,6 +147,108 @@ final class WPFH_SADM_Email_2FA {
 
 		// Display 2FA screen and exit
 		$this->render_2fa_form( $user, $token );
+		exit;
+	}
+
+	/**
+	 * Handle dedicated 2FA form submission via wp-login.php?action=wpfh_sadm_2fa.
+	 */
+	public function handle_2fa_verification() {
+		if ( 'POST' !== strtoupper( isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '' ) ) {
+			wp_safe_redirect( wp_login_url() );
+			exit;
+		}
+
+		$token = isset( $_POST['wpfh_sadm_token'] ) ? sanitize_text_field( wp_unslash( $_POST['wpfh_sadm_token'] ) ) : '';
+		$code  = isset( $_POST['wpfh_sadm_otp_code'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['wpfh_sadm_otp_code'] ) ) ) : '';
+		$nonce = isset( $_POST['wpfh_sadm_2fa_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['wpfh_sadm_2fa_nonce'] ) ) : '';
+
+		if ( '' === $token || ! wp_verify_nonce( $nonce, 'wpfh_sadm_verify_2fa_' . $token ) ) {
+			wp_safe_redirect( add_query_arg( 'wpfh_2fa_err', 'expired', wp_login_url() ) );
+			exit;
+		}
+
+		$transient_key = 'wpfh_sadm_otp_' . $token;
+		$data          = get_transient( $transient_key );
+
+		if ( false === $data || empty( $data['user_id'] ) ) {
+			wp_safe_redirect( add_query_arg( 'wpfh_2fa_err', 'expired', wp_login_url() ) );
+			exit;
+		}
+
+		$user = get_user_by( 'id', (int) $data['user_id'] );
+		if ( ! $user instanceof WP_User ) {
+			delete_transient( $transient_key );
+			wp_safe_redirect( wp_login_url() );
+			exit;
+		}
+
+		$attempts = isset( $data['attempts'] ) ? (int) $data['attempts'] : 0;
+		if ( $attempts >= 5 ) {
+			delete_transient( $transient_key );
+			wp_safe_redirect( add_query_arg( 'wpfh_2fa_err', 'too_many', wp_login_url() ) );
+			exit;
+		}
+
+		// Verify submitted code
+		$valid = false;
+
+		// 1. Check primary OTP code
+		if ( '' !== $code && ! empty( $data['otp_hash'] ) && wp_check_password( $code, $data['otp_hash'] ) ) {
+			$valid = true;
+		}
+
+		// 2. Pro: Check emergency backup recovery codes
+		if ( ! $valid && '' !== $code && function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) {
+			$backup_codes = get_user_meta( $user->ID, 'wpfh_sadm_backup_codes', true );
+			if ( is_array( $backup_codes ) ) {
+				foreach ( $backup_codes as $idx => $stored_hash ) {
+					if ( wp_check_password( $code, $stored_hash ) ) {
+						$valid = true;
+						unset( $backup_codes[ $idx ] );
+						update_user_meta( $user->ID, 'wpfh_sadm_backup_codes', array_values( $backup_codes ) );
+						break;
+					}
+				}
+			}
+		}
+
+		if ( ! $valid ) {
+			$data['attempts'] = $attempts + 1;
+			if ( $data['attempts'] >= 5 ) {
+				delete_transient( $transient_key );
+				wp_safe_redirect( add_query_arg( 'wpfh_2fa_err', 'too_many', wp_login_url() ) );
+				exit;
+			}
+			set_transient( $transient_key, $data, 600 );
+			$this->render_2fa_form(
+				$user,
+				$token,
+				esc_html__( 'Invalid verification code. Please check your email and try again.', 'forgehub-secure-admin' )
+			);
+			exit;
+		}
+
+		// Valid OTP: cleanup transient
+		delete_transient( $transient_key );
+
+		// Pro: handle "Remember this device"
+		$settings = wpfh_sadm_get_settings();
+		if ( ! empty( $_POST['wpfh_sadm_trust_device'] ) && ! empty( $settings['pro_trusted_device'] ) && function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) {
+			$this->set_trusted_device_cookie( $user->ID );
+		}
+
+		// Complete WordPress login session cleanly without password re-submission.
+		$remember = ! empty( $data['remember'] );
+		wp_set_auth_cookie( $user->ID, $remember );
+		wp_set_current_user( $user->ID );
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core WordPress login hook.
+		do_action( 'wp_login', $user->user_login, $user );
+		do_action( 'wpfh_sadm_2fa_success', $user );
+
+		$redirect_to = ! empty( $data['redirect_to'] ) ? $data['redirect_to'] : admin_url();
+		$redirect_to = wp_validate_redirect( $redirect_to, admin_url() );
+		wp_safe_redirect( $redirect_to );
 		exit;
 	}
 
@@ -264,17 +311,26 @@ final class WPFH_SADM_Email_2FA {
 	/**
 	 * Render the 2FA verification form inside wp-login.php.
 	 *
-	 * @param WP_User $user  User object.
-	 * @param string  $token 32-character session token.
+	 * @param WP_User $user      User object.
+	 * @param string  $token     32-character session token.
+	 * @param string  $error_msg Optional error message to display.
+	 * @param string  $notice    Optional informational message to display.
 	 */
-	public function render_2fa_form( $user, $token ) {
+	public function render_2fa_form( $user, $token, $error_msg = '', $notice = '' ) {
+		$wp_error = new WP_Error();
+		if ( '' !== $error_msg ) {
+			$wp_error->add( 'wpfh_sadm_2fa_error', $error_msg );
+		}
+
 		login_header(
 			esc_html__( 'Two-Factor Authentication', 'forgehub-secure-admin' ),
-			'',
-			new WP_Error()
+			'' !== $notice ? '<p class="message">' . esc_html( $notice ) . '</p>' : '',
+			$wp_error
 		);
 
 		$masked_email = $this->mask_email( $user->user_email );
+		$settings     = wpfh_sadm_get_settings();
+		$form_action  = add_query_arg( 'action', 'wpfh_sadm_2fa', wp_login_url() );
 		?>
 		<style>
 			.wpfh-2fa-card {
@@ -318,17 +374,16 @@ final class WPFH_SADM_Email_2FA {
 				?>
 			</p>
 
-			<form name="wpfh_2fa_form" id="wpfh_2fa_form" action="<?php echo esc_url( wp_login_url() ); ?>" method="post">
+			<form name="wpfh_2fa_form" id="wpfh_2fa_form" action="<?php echo esc_url( $form_action ); ?>" method="post">
+				<?php wp_nonce_field( 'wpfh_sadm_verify_2fa_' . $token, 'wpfh_sadm_2fa_nonce' ); ?>
 				<input type="hidden" name="wpfh_sadm_token" value="<?php echo esc_attr( $token ); ?>" />
-				<input type="hidden" name="log" value="<?php echo esc_attr( $user->user_login ); ?>" />
-				<input type="hidden" name="pwd" value="__WPFH_2FA_BYPASS__" />
 
 				<p>
 					<label for="wpfh_sadm_otp_code"><?php esc_html_e( '6-Digit Code or Recovery Key', 'forgehub-secure-admin' ); ?></label>
-					<input type="text" name="wpfh_sadm_otp_code" id="wpfh_sadm_otp_code" class="input wpfh-otp-input" value="" size="8" maxlength="12" autocomplete="one-time-code" autofocus inputmode="numeric" required />
+					<input type="text" name="wpfh_sadm_otp_code" id="wpfh_sadm_otp_code" class="input wpfh-otp-input" value="" size="8" maxlength="12" autocomplete="one-time-code" autofocus required />
 				</p>
 
-				<?php if ( function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) : ?>
+				<?php if ( ! empty( $settings['pro_trusted_device'] ) && function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) : ?>
 					<p class="wpfh-2fa-trust">
 						<label>
 							<input name="wpfh_sadm_trust_device" type="checkbox" id="wpfh_sadm_trust_device" value="1" />
@@ -369,12 +424,30 @@ final class WPFH_SADM_Email_2FA {
 		$data          = get_transient( $transient_key );
 
 		if ( false !== $data && ! empty( $data['user_id'] ) ) {
-			$user = get_user_by( 'id', $data['user_id'] );
+			$user = get_user_by( 'id', (int) $data['user_id'] );
 			if ( $user instanceof WP_User ) {
-				$new_otp = sprintf( '%06d', wp_rand( 100000, 999999 ) );
-				$data['otp_hash'] = wp_hash_password( (string) $new_otp );
+				$last_sent = isset( $data['last_sent'] ) ? (int) $data['last_sent'] : 0;
+				if ( ( time() - $last_sent ) < 60 ) {
+					$this->render_2fa_form(
+						$user,
+						$token,
+						esc_html__( 'Please wait 60 seconds before requesting another verification code.', 'forgehub-secure-admin' )
+					);
+					exit;
+				}
+				$new_otp           = sprintf( '%06d', wp_rand( 100000, 999999 ) );
+				$data['otp_hash']  = wp_hash_password( (string) $new_otp );
+				$data['last_sent'] = time();
 				set_transient( $transient_key, $data, 600 );
 				$this->send_otp_email( $user, $new_otp );
+
+				$this->render_2fa_form(
+					$user,
+					$token,
+					'',
+					esc_html__( 'A new verification code has been sent to your email.', 'forgehub-secure-admin' )
+				);
+				exit;
 			}
 		}
 

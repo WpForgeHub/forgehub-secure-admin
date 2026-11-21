@@ -65,39 +65,46 @@ final class WPFH_SADM_Admin {
 
 		check_admin_referer( 'wpfh_sadm_save_settings_nonce', 'wpfh_sadm_nonce' );
 
-		$current = wpfh_sadm_get_settings();
+		$current    = wpfh_sadm_get_settings();
+		$active_tab = sanitize_key( $_POST['active_tab'] ?? 'brute_force' );
+		$is_pro     = function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code();
 
-		$current['brute_force_enabled']  = ! empty( $_POST['brute_force_enabled'] ) ? 1 : 0;
-		$current['max_attempts']         = max( 1, min( 50, absint( $_POST['max_attempts'] ?? 5 ) ) );
-		$current['lockout_duration']     = max( 1, min( 1440, absint( $_POST['lockout_duration'] ?? 15 ) ) );
-		$current['whitelist_ips']        = sanitize_textarea_field( wp_unslash( $_POST['whitelist_ips'] ?? '' ) );
+		if ( 'brute_force' === $active_tab ) {
+			$current['brute_force_enabled'] = ! empty( $_POST['brute_force_enabled'] ) ? 1 : 0;
+			$current['max_attempts']        = max( 1, min( 50, absint( $_POST['max_attempts'] ?? 5 ) ) );
+			$current['lockout_duration']    = max( 1, min( 1440, absint( $_POST['lockout_duration'] ?? 15 ) ) );
+			$current['whitelist_ips']       = sanitize_textarea_field( wp_unslash( $_POST['whitelist_ips'] ?? '' ) );
+			$current['trust_proxy_headers'] = ! empty( $_POST['trust_proxy_headers'] ) ? 1 : 0;
+		} elseif ( 'two_factor' === $active_tab ) {
+			$current['email_2fa_enabled'] = ! empty( $_POST['email_2fa_enabled'] ) ? 1 : 0;
 
-		$current['email_2fa_enabled']    = ! empty( $_POST['email_2fa_enabled'] ) ? 1 : 0;
-
-		$current['generic_login_errors'] = ! empty( $_POST['generic_login_errors'] ) ? 1 : 0;
-		$current['disable_xmlrpc']       = ! empty( $_POST['disable_xmlrpc'] ) ? 1 : 0;
-		$current['block_author_query']   = ! empty( $_POST['block_author_query'] ) ? 1 : 0;
-		$current['hide_wp_version']      = ! empty( $_POST['hide_wp_version'] ) ? 1 : 0;
-		$current['hide_login_slug']      = WPFH_SADM_Hide_Login::sanitize_slug( sanitize_text_field( wp_unslash( $_POST['hide_login_slug'] ?? '' ) ) );
-		$current['security_headers']     = ! empty( $_POST['security_headers'] ) ? 1 : 0;
-		$current['disable_file_editor']  = ! empty( $_POST['disable_file_editor'] ) ? 1 : 0;
-		$current['honeypot_enabled']     = ! empty( $_POST['honeypot_enabled'] ) ? 1 : 0;
-		$current['lost_password_limit']  = ! empty( $_POST['lost_password_limit'] ) ? 1 : 0;
-
-		// Pro settings (if premium)
-		if ( function_exists( 'wpfh_sadm_fs' ) && wpfh_sadm_fs()->can_use_premium_code() ) {
-			$current['pro_trusted_device'] = ! empty( $_POST['pro_trusted_device'] ) ? 1 : 0;
-			$current['pro_idle_logout']    = ! empty( $_POST['pro_idle_logout'] ) ? 1 : 0;
-			$current['pro_idle_timeout']   = max( 1, min( 240, absint( $_POST['pro_idle_timeout'] ?? 15 ) ) );
-			$current['pro_login_alert']    = ! empty( $_POST['pro_login_alert'] ) ? 1 : 0;
-			$current['pro_block_bad_bots'] = ! empty( $_POST['pro_block_bad_bots'] ) ? 1 : 0;
-			$current['pro_bad_bot_list']   = sanitize_textarea_field( wp_unslash( $_POST['pro_bad_bot_list'] ?? '' ) );
-
-			if ( isset( $_POST['pro_2fa_roles'] ) && is_array( $_POST['pro_2fa_roles'] ) ) {
-				$current['pro_2fa_roles'] = array_map( 'sanitize_key', $_POST['pro_2fa_roles'] );
-				if ( ! in_array( 'administrator', $current['pro_2fa_roles'], true ) ) {
-					$current['pro_2fa_roles'][] = 'administrator';
+			if ( $is_pro ) {
+				$current['pro_trusted_device'] = ! empty( $_POST['pro_trusted_device'] ) ? 1 : 0;
+				$submitted_roles               = ( isset( $_POST['pro_2fa_roles'] ) && is_array( $_POST['pro_2fa_roles'] ) )
+					? array_map( 'sanitize_key', wp_unslash( $_POST['pro_2fa_roles'] ) )
+					: array();
+				if ( ! in_array( 'administrator', $submitted_roles, true ) ) {
+					$submitted_roles[] = 'administrator';
 				}
+				$current['pro_2fa_roles'] = array_values( array_unique( $submitted_roles ) );
+			}
+		} elseif ( 'hardening' === $active_tab ) {
+			$current['generic_login_errors'] = ! empty( $_POST['generic_login_errors'] ) ? 1 : 0;
+			$current['disable_xmlrpc']       = ! empty( $_POST['disable_xmlrpc'] ) ? 1 : 0;
+			$current['block_author_query']   = ! empty( $_POST['block_author_query'] ) ? 1 : 0;
+			$current['hide_wp_version']      = ! empty( $_POST['hide_wp_version'] ) ? 1 : 0;
+			$current['hide_login_slug']      = WPFH_SADM_Hide_Login::sanitize_slug( sanitize_text_field( wp_unslash( $_POST['hide_login_slug'] ?? '' ) ) );
+			$current['security_headers']     = ! empty( $_POST['security_headers'] ) ? 1 : 0;
+			$current['disable_file_editor']  = ! empty( $_POST['disable_file_editor'] ) ? 1 : 0;
+			$current['honeypot_enabled']     = ! empty( $_POST['honeypot_enabled'] ) ? 1 : 0;
+			$current['lost_password_limit']  = ! empty( $_POST['lost_password_limit'] ) ? 1 : 0;
+
+			if ( $is_pro ) {
+				$current['pro_idle_logout']    = ! empty( $_POST['pro_idle_logout'] ) ? 1 : 0;
+				$current['pro_idle_timeout']   = max( 1, min( 240, absint( $_POST['pro_idle_timeout'] ?? 15 ) ) );
+				$current['pro_login_alert']    = ! empty( $_POST['pro_login_alert'] ) ? 1 : 0;
+				$current['pro_block_bad_bots'] = ! empty( $_POST['pro_block_bad_bots'] ) ? 1 : 0;
+				$current['pro_bad_bot_list']   = sanitize_textarea_field( wp_unslash( $_POST['pro_bad_bot_list'] ?? '' ) );
 			}
 		}
 
@@ -106,7 +113,7 @@ final class WPFH_SADM_Admin {
 		wp_safe_redirect( add_query_arg( array(
 			'page'             => 'forgehub-secure-admin',
 			'settings-updated' => '1',
-			'tab'              => sanitize_key( $_POST['active_tab'] ?? 'brute_force' ),
+			'tab'              => $active_tab,
 		), admin_url( 'options-general.php' ) ) );
 		exit;
 	}
@@ -298,6 +305,18 @@ final class WPFH_SADM_Admin {
 										// translators: %s: current user IP address
 										printf( esc_html__( 'Enter one IPv4 or IPv6 per line. Your current IP is %s.', 'forgehub-secure-admin' ), '<code>' . esc_html( wpfh_sadm_get_client_ip() ) . '</code>' );
 										?>
+									</p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Reverse Proxy Headers', 'forgehub-secure-admin' ); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="trust_proxy_headers" value="1" <?php checked( $settings['trust_proxy_headers'], 1 ); ?> />
+										<?php esc_html_e( 'Trust Cloudflare / X-Forwarded-For proxy headers for client IP detection', 'forgehub-secure-admin' ); ?>
+									</label>
+									<p class="description">
+										<?php esc_html_e( 'Enable ONLY if your site sits behind a trusted reverse proxy (Cloudflare, Nginx proxy, AWS ALB). Leaving this off prevents IP spoofing attacks.', 'forgehub-secure-admin' ); ?>
 									</p>
 								</td>
 							</tr>

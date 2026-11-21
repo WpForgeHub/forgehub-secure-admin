@@ -38,9 +38,12 @@ final class WPFH_SADM_Hide_Login {
 	private function __construct() {
 		$settings = wpfh_sadm_get_settings();
 
+		$disabled_by_constant = defined( 'WPFH_SADM_DISABLE_HIDE_LOGIN' ) && WPFH_SADM_DISABLE_HIDE_LOGIN;
+		$has_pretty_permalinks = '' !== (string) get_option( 'permalink_structure', '' );
+
 		$this->slug = self::sanitize_slug( isset( $settings['hide_login_slug'] ) ? $settings['hide_login_slug'] : '' );
 
-		if ( '' !== $this->slug ) {
+		if ( '' !== $this->slug && ! $disabled_by_constant && $has_pretty_permalinks ) {
 			add_action( 'init', array( $this, 'route_request' ), 1 );
 			add_filter( 'site_url', array( $this, 'filter_url' ), 10, 1 );
 			add_filter( 'network_site_url', array( $this, 'filter_url' ), 10, 1 );
@@ -100,6 +103,12 @@ final class WPFH_SADM_Hide_Login {
 		$is_login = ( 'wp-login.php' === $path || 'wp-login' === $path );
 		$is_admin = ( 'wp-admin' === $path || 0 === strpos( $path, 'wp-admin/' ) );
 
+		// Allow password-protected post submissions on wp-login.php?action=postpass.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( $is_login && isset( $_GET['action'] ) && 'postpass' === sanitize_key( wp_unslash( $_GET['action'] ) ) ) {
+			return;
+		}
+
 		if ( $is_admin ) {
 			$allowed = array( 'wp-admin/admin-ajax.php', 'wp-admin/admin-post.php', 'wp-admin/load-scripts.php', 'wp-admin/load-styles.php' );
 			if ( in_array( $path, $allowed, true ) ) {
@@ -116,7 +125,7 @@ final class WPFH_SADM_Hide_Login {
 	 * Render wp-login.php for the custom slug.
 	 */
 	private function serve_login() {
-		global $pagenow, $error, $interim_login, $action, $user_login;
+		global $pagenow, $error, $interim_login, $action, $user_login, $user_identity, $errors, $redirect_to;
 
 		$pagenow = 'wp-login.php'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 		status_header( 200 );

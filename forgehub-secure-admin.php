@@ -98,8 +98,9 @@ function wpfh_sadm_get_settings() {
 		'max_attempts'         => 5,
 		'lockout_duration'     => 15, // in minutes
 		'whitelist_ips'        => '',
-		// 2FA
-		'email_2fa_enabled'    => 1,
+		'trust_proxy_headers'  => 0,
+		// 2FA (opt-in so fresh installs never lock out sites without working wp_mail)
+		'email_2fa_enabled'    => 0,
 		// Hardening
 		'generic_login_errors' => 1,
 		'disable_xmlrpc'       => 1,
@@ -134,14 +135,22 @@ function wpfh_sadm_get_settings() {
  * @return string
  */
 function wpfh_sadm_get_client_ip() {
-	$ip = '';
-	if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
-		$ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CLIENT_IP'] ) );
-	} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-		// Can contain a comma-separated list of IPs; first is original client
-		$parts = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
-		$ip    = trim( $parts[0] );
-	} elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+	$settings    = wpfh_sadm_get_settings();
+	$trust_proxy = (bool) apply_filters( 'wpfh_sadm_trust_proxy_headers', ! empty( $settings['trust_proxy_headers'] ) );
+	$ip          = '';
+
+	if ( $trust_proxy ) {
+		if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+			$ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
+		} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+			$parts = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
+			$ip    = trim( $parts[0] );
+		} elseif ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
+			$ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CLIENT_IP'] ) );
+		}
+	}
+
+	if ( '' === $ip && ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
 		$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
 	}
 

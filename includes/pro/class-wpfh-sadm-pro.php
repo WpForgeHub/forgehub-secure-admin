@@ -22,6 +22,7 @@ final class WPFH_SADM_Pro {
 
 	private function __construct() {
 		add_action( 'wp_login', array( $this, 'maybe_send_login_alert' ), 20, 2 );
+		add_action( 'init', array( $this, 'maybe_block_blacklisted_ip' ), 0 );
 		add_action( 'init', array( $this, 'maybe_block_bad_bots' ), 1 );
 		add_action( 'show_user_profile', array( $this, 'render_recovery_codes_section' ) );
 		add_action( 'edit_user_profile', array( $this, 'render_recovery_codes_section' ) );
@@ -29,6 +30,64 @@ final class WPFH_SADM_Pro {
 		add_action( 'edit_user_profile_update', array( $this, 'handle_generate_recovery_codes' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'maybe_enqueue_idle_logout_script' ) );
 		add_action( 'admin_post_wpfh_sadm_export_activity_csv', array( $this, 'export_activity_csv' ) );
+		add_action( 'admin_post_wpfh_sadm_blacklist_ip', array( $this, 'handle_blacklist_ip' ) );
+	}
+
+	/**
+	 * Block requests from manually blacklisted IPs.
+	 */
+	public function maybe_block_blacklisted_ip() {
+		if ( wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			return;
+		}
+		$blacklisted = get_option( 'wpfh_sadm_blacklisted_ips', array() );
+		if ( empty( $blacklisted ) || ! is_array( $blacklisted ) ) {
+			return;
+		}
+		$ip = wpfh_sadm_get_client_ip();
+		if ( in_array( $ip, $blacklisted, true ) ) {
+			status_header( 403 );
+			wp_die( esc_html__( 'Access denied.', 'forgehub-secure-admin' ), esc_html__( 'Forbidden', 'forgehub-secure-admin' ), array( 'response' => 403 ) );
+		}
+	}
+
+	/**
+	 * Handle admin_post_wpfh_sadm_blacklist_ip action from the Activity Log table.
+	 */
+	public function handle_blacklist_ip() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized access.', 'forgehub-secure-admin' ) );
+		}
+
+		check_admin_referer( 'wpfh_sadm_blacklist_action', 'wpfh_sadm_blacklist_nonce' );
+
+		$ip         = isset( $_GET['ip'] ) ? sanitize_text_field( wp_unslash( $_GET['ip'] ) ) : '';
+		$valid_ip   = filter_var( $ip, FILTER_VALIDATE_IP );
+		$current_ip = wpfh_sadm_get_client_ip();
+
+		if ( $valid_ip && $valid_ip !== $current_ip ) {
+			$blacklisted = get_option( 'wpfh_sadm_blacklisted_ips', array() );
+			if ( ! is_array( $blacklisted ) ) {
+				$blacklisted = array();
+			}
+			if ( ! in_array( $valid_ip, $blacklisted, true ) ) {
+				$blacklisted[] = $valid_ip;
+				update_option( 'wpfh_sadm_blacklisted_ips', $blacklisted );
+			}
+			$this->blacklist_ip( $valid_ip );
+		}
+
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'        => 'forgehub-secure-admin',
+					'tab'         => 'activity',
+					'blacklisted' => $valid_ip && $valid_ip !== $current_ip ? '1' : '0',
+				),
+				admin_url( 'options-general.php' )
+			)
+		);
+		exit;
 	}
 
 	/**
@@ -102,14 +161,26 @@ final class WPFH_SADM_Pro {
 			return;
 		}
 
-		$codes = get_user_meta( $user->ID, 'wpfh_sadm_backup_codes', true );
-		$count = is_array( $codes ) ? count( $codes ) : 0;
+		$codes       = get_user_meta( $user->ID, 'wpfh_sadm_backup_codes', true );
+		$count       = is_array( $codes ) ? count( $codes ) : 0;
+		$plain_codes = get_transient( 'wpfh_sadm_plain_codes_' . $user->ID );
+		if ( is_array( $plain_codes ) && ! empty( $plain_codes ) ) {
+			delete_transient( 'wpfh_sadm_plain_codes_' . $user->ID );
+		}
 		?>
 		<h2><?php esc_html_e( 'Secure Admin Guard: Emergency Backup Codes', 'forgehub-secure-admin' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>
 				<th><?php esc_html_e( 'Backup Recovery Codes', 'forgehub-secure-admin' ); ?></th>
 				<td>
+					<?php if ( is_array( $plain_codes ) && ! empty( $plain_codes ) ) : ?>
+						<div style="background: #fefce8; border: 1px solid #facc15; border-radius: 6px; padding: 14px 16px; margin-bottom: 14px; max-width: 460px;">
+							<p style="margin: 0 0 8px; font-weight: 600; color: #854d0e;">
+								<?php esc_html_e( 'Save these emergency recovery codes now — they will not be shown again:', 'forgehub-secure-admin' ); ?>
+							</p>
+							<pre style="margin: 0; font-family: monospace; font-size: 14px; line-height: 1.7; background: #ffffff; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 4px;"><?php echo esc_html( implode( "\n", $plain_codes ) ); ?></pre>
+						</div>
+					<?php endif; ?>
 					<p>
 						<?php
 						// translators: %d: number of remaining recovery codes
@@ -170,17 +241,18 @@ final class WPFH_SADM_Pro {
 
 		$timeout_minutes = max( 1, absint( $settings['pro_idle_timeout'] ?? 15 ) );
 		$timeout_ms      = $timeout_minutes * 60 * 1000;
-		$logout_url      = wp_logout_url( wp_login_url() );
+		$logout_url      = html_entity_decode( wp_logout_url( wp_login_url() ), ENT_QUOTES, 'UTF-8' );
 
 		$inline_js = "
 		(function() {
 			var idleTimeout = {$timeout_ms};
+			var logoutUrl = " . wp_json_encode( $logout_url ) . ";
 			var timer = null;
 			function resetTimer() {
 				clearTimeout(timer);
 				timer = setTimeout(function() {
-					alert('" . esc_js( __( 'Your session has expired due to inactivity. You will now be redirected to the login page.', 'forgehub-secure-admin' ) ) . "');
-					window.location.href = '" . esc_url_raw( $logout_url ) . "';
+					alert(" . wp_json_encode( __( 'Your session has expired due to inactivity. You will now be redirected to the login page.', 'forgehub-secure-admin' ) ) . ");
+					window.location.href = logoutUrl;
 				}, idleTimeout);
 			}
 			['mousemove', 'keydown', 'scroll', 'click'].forEach(function(evt) {
@@ -190,6 +262,7 @@ final class WPFH_SADM_Pro {
 		})();
 		";
 
+		wp_enqueue_script( 'wp-util' );
 		wp_add_inline_script( 'wp-util', $inline_js );
 	}
 
@@ -235,7 +308,11 @@ final class WPFH_SADM_Pro {
 		foreach ( $rows as $row ) {
 			$escaped = array_map(
 				static function ( $field ) {
-					return '"' . str_replace( '"', '""', (string) $field ) . '"';
+					$value = (string) $field;
+					if ( '' !== $value && in_array( $value[0], array( '=', '+', '-', '@', "\t", "\r" ), true ) ) {
+						$value = "'" . $value;
+					}
+					return '"' . str_replace( '"', '""', $value ) . '"';
 				},
 				$row
 			);
