@@ -586,7 +586,7 @@ final class WPFH_SADM_Admin {
 										<?php esc_html_e( 'Export CSV (Audit)', 'forgehub-secure-admin' ); ?>
 									</a>
 								<?php else : ?>
-									<a href="https://wpforgehub.com/plugins/forgehub-secure-admin/" target="_blank" class="button button-secondary" title="<?php esc_attr_e( 'Available in Pro Edition', 'forgehub-secure-admin' ); ?>">
+									<a href="<?php echo esc_url( function_exists( 'wpfh_sadm_fs' ) ? wpfh_sadm_fs()->get_upgrade_url() : 'https://wpforgehub.com/product/secure-admin/#pricing' ); ?>" target="_blank" rel="noopener noreferrer" class="button button-secondary" title="<?php esc_attr_e( 'Available in Pro Edition', 'forgehub-secure-admin' ); ?>">
 										<span class="dashicons dashicons-lock" style="font-size: 16px; vertical-align: middle; margin-right: 2px;"></span>
 										<?php esc_html_e( 'Export CSV (Pro)', 'forgehub-secure-admin' ); ?>
 									</a>
@@ -760,7 +760,7 @@ final class WPFH_SADM_Admin {
 					<p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; max-width: 720px; margin-bottom: 18px;">
 						<?php esc_html_e( 'Unlock 2FA for all user roles (Editor, Shop Manager, Customer), 30-day trusted devices, 8 emergency recovery codes, idle admin session auto-logout, and instant login security alerts.', 'forgehub-secure-admin' ); ?>
 					</p>
-					<a href="https://wpforgehub.com/plugins/forgehub-secure-admin/" target="_blank" class="button button-primary" style="background: #ef4444; border-color: #dc2626; font-size: 14px; padding: 6px 18px; height: auto;">
+					<a href="<?php echo esc_url( function_exists( 'wpfh_sadm_fs' ) ? wpfh_sadm_fs()->get_upgrade_url() : 'https://wpforgehub.com/product/secure-admin/#pricing' ); ?>" target="_blank" rel="noopener noreferrer" class="button button-primary" style="background: #ef4444; border-color: #dc2626; font-size: 14px; padding: 6px 18px; height: auto;">
 						<?php esc_html_e( 'Get Pro Edition &rarr;', 'forgehub-secure-admin' ); ?>
 					</a>
 				</div>
