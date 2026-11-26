@@ -11,6 +11,8 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 delete_option( 'wpfh_sadm_settings' );
 delete_option( 'wpfh_sadm_lockout_logs' );
+delete_option( 'wpfh_sadm_activity_logs' );
+delete_option( 'wpfh_sadm_review_nudge' );
 
 global $wpdb;
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching

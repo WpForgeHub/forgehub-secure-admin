@@ -4,7 +4,7 @@ Tags: security, brute force, login, two factor, 2fa
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,10 @@ No. Secure Admin Guard is built according to the WPForgeHub Zero-Bloat standard.
 1. Secure Admin Guard main settings dashboard with Brute Force, Two-Factor Authentication, and Hardening controls.
 
 == Changelog ==
+
+= 1.3.2 =
+* Improvement: Zero-Nag admin UI cleanup — removed inline upsell prompts and locked buttons, consolidated into a single calm Priority Support & Pro footer link.
+* New: Added value-moment, one-click dismissible review & GitHub star notice (hidden on install; triggers only after real use).
 
 = 1.3.1 =
 * Standardize Upgrade to Pro links to canonical `#pricing` product URL.

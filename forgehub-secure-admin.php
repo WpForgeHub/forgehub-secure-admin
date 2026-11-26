@@ -3,7 +3,7 @@
  * Plugin Name:       ForgeHub Secure Admin Guard
  * Plugin URI:        https://wpforgehub.com/plugins/forgehub-secure-admin/
  * Description:       Lightweight zero-bloat login protection with brute force rate limiting, email OTP two-factor authentication, and WordPress hardening.
- * Version:           1.3.1
+ * Version:           1.3.2
  * Author:            WPForgeHub
  * Author URI:        https://wpforgehub.com
  * License:           GPLv2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPFH_SADM_VERSION', '1.3.1' );
+define( 'WPFH_SADM_VERSION', '1.3.2' );
 define( 'WPFH_SADM_FILE', __FILE__ );
 define( 'WPFH_SADM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WPFH_SADM_URL', plugin_dir_url( __FILE__ ) );
@@ -84,6 +84,7 @@ function wpfh_sadm_uninstall_cleanup() {
 	delete_option( 'wpfh_sadm_settings' );
 	delete_option( 'wpfh_sadm_lockout_logs' );
 	delete_option( 'wpfh_sadm_activity_logs' );
+	delete_option( 'wpfh_sadm_review_nudge' );
 }
 
 /**
@@ -180,6 +181,7 @@ final class WPFH_Secure_Admin {
 	}
 
 	private function load_dependencies() {
+		require_once WPFH_SADM_PATH . 'includes/class-wpfh-review-nudge.php';
 		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-brute-force.php';
 		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-email-2fa.php';
 		require_once WPFH_SADM_PATH . 'includes/class-wpfh-sadm-hardening.php';
@@ -199,6 +201,30 @@ final class WPFH_Secure_Admin {
 		WPFH_SADM_Hardening::get_instance();
 		WPFH_SADM_Hide_Login::get_instance();
 		WPFH_SADM_Admin::get_instance();
+
+		if ( is_admin() && class_exists( 'WPFH_Review_Nudge' ) ) {
+			$review_nudge = new WPFH_Review_Nudge(
+				array(
+					'plugin_slug'   => 'forgehub-secure-admin',
+					'plugin_name'   => 'ForgeHub Secure Admin Guard',
+					'option_prefix' => 'wpfh_sadm',
+					'github_url'    => 'https://github.com/WpForgeHub/forgehub-secure-admin',
+					'min_actions'   => 3,
+					'min_days'      => 7,
+					'trigger_mode'  => 'or',
+					'screens'       => array( 'settings_page_forgehub-secure-admin' ),
+					'strings'       => array(
+						'heading'     => __( 'Enjoying ForgeHub Secure Admin Guard?', 'forgehub-secure-admin' ),
+						'message'     => __( 'If ForgeHub Secure Admin Guard has helped protect your site, a quick 5-star review helps other site owners discover it and keeps development active.', 'forgehub-secure-admin' ),
+						'rate_cta'    => __( 'Rate 5 Stars on WordPress.org', 'forgehub-secure-admin' ),
+						'github_cta'  => __( 'Star on GitHub', 'forgehub-secure-admin' ),
+						'later_cta'   => __( 'Maybe later', 'forgehub-secure-admin' ),
+						'dismiss_cta' => __( 'Already did / Dismiss', 'forgehub-secure-admin' ),
+					),
+				)
+			);
+			$review_nudge->register();
+		}
 
 		$pro_class = 'WPFH_SADM_Pro';
 		if ( class_exists( $pro_class ) && wpfh_sadm_fs()->can_use_premium_code() ) {

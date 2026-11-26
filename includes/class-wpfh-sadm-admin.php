@@ -112,6 +112,10 @@ final class WPFH_SADM_Admin {
 
 		update_option( 'wpfh_sadm_settings', $current );
 
+		if ( class_exists( 'WPFH_Review_Nudge' ) ) {
+			WPFH_Review_Nudge::track_success( 'wpfh_sadm' );
+		}
+
 		wp_safe_redirect( add_query_arg( array(
 			'page'             => 'forgehub-secure-admin',
 			'settings-updated' => '1',
@@ -398,8 +402,8 @@ final class WPFH_SADM_Admin {
 											</label>
 										<?php endforeach; ?>
 									<?php else : ?>
-										<p class="description" style="color: #94a3b8;">
-											<?php esc_html_e( 'Upgrade to Pro to enable 2FA for Editors, Authors, Shop Managers, and Customers.', 'forgehub-secure-admin' ); ?>
+										<p class="description">
+											<?php esc_html_e( 'Email 2FA verification applies to Administrator accounts.', 'forgehub-secure-admin' ); ?>
 										</p>
 									<?php endif; ?>
 								</td>
@@ -585,11 +589,6 @@ final class WPFH_SADM_Admin {
 										<span class="dashicons dashicons-download" style="font-size: 16px; vertical-align: middle; margin-right: 2px;"></span>
 										<?php esc_html_e( 'Export CSV (Audit)', 'forgehub-secure-admin' ); ?>
 									</a>
-								<?php else : ?>
-									<a href="<?php echo esc_url( function_exists( 'wpfh_sadm_fs' ) ? wpfh_sadm_fs()->get_upgrade_url() : 'https://wpforgehub.com/product/secure-admin/#pricing' ); ?>" target="_blank" rel="noopener noreferrer" class="button button-secondary" title="<?php esc_attr_e( 'Available in Pro Edition', 'forgehub-secure-admin' ); ?>">
-										<span class="dashicons dashicons-lock" style="font-size: 16px; vertical-align: middle; margin-right: 2px;"></span>
-										<?php esc_html_e( 'Export CSV (Pro)', 'forgehub-secure-admin' ); ?>
-									</a>
 								<?php endif; ?>
 								<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=wpfh_sadm_clear_activity_logs' ), 'wpfh_sadm_clear_activity', 'wpfh_sadm_clear_nonce' ) ); ?>" class="button button-secondary" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to clear the activity log?', 'forgehub-secure-admin' ) ); ?>');">
 									<?php esc_html_e( 'Clear Log', 'forgehub-secure-admin' ); ?>
@@ -672,7 +671,7 @@ final class WPFH_SADM_Admin {
 								</tbody>
 							</table>
 							<p style="margin-top: 14px; font-size: 12px; color: #64748b;">
-								<?php esc_html_e( 'Free Edition circular buffer holds up to 100 recent entries. Upgrade to Pro for extended history and CSV audit export.', 'forgehub-secure-admin' ); ?>
+								<?php esc_html_e( 'Showing up to 100 most recent login events.', 'forgehub-secure-admin' ); ?>
 							</p>
 						<?php endif; ?>
 
@@ -753,17 +752,16 @@ final class WPFH_SADM_Admin {
 			</form>
 
 			<?php if ( ! $is_pro ) : ?>
-				<div style="margin-top: 30px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; border-radius: 8px; padding: 24px 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-					<h3 style="color: #ffffff; margin-top: 0; font-size: 18px; font-weight: 600;">
-						<?php esc_html_e( 'Upgrade to Secure Admin Guard Pro', 'forgehub-secure-admin' ); ?>
-					</h3>
-					<p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; max-width: 720px; margin-bottom: 18px;">
-						<?php esc_html_e( 'Unlock 2FA for all user roles (Editor, Shop Manager, Customer), 30-day trusted devices, 8 emergency recovery codes, idle admin session auto-logout, and instant login security alerts.', 'forgehub-secure-admin' ); ?>
-					</p>
-					<a href="<?php echo esc_url( function_exists( 'wpfh_sadm_fs' ) ? wpfh_sadm_fs()->get_upgrade_url() : 'https://wpforgehub.com/product/secure-admin/#pricing' ); ?>" target="_blank" rel="noopener noreferrer" class="button button-primary" style="background: #ef4444; border-color: #dc2626; font-size: 14px; padding: 6px 18px; height: auto;">
-						<?php esc_html_e( 'Get Pro Edition &rarr;', 'forgehub-secure-admin' ); ?>
-					</a>
-				</div>
+				<p style="margin-top: 20px; font-size: 13px; color: #64748b;">
+					<?php
+					$upgrade_url = function_exists( 'wpfh_sadm_fs' ) ? wpfh_sadm_fs()->get_upgrade_url() : 'https://wpforgehub.com/product/secure-admin/#pricing';
+					printf(
+						/* translators: %s: link to Priority Support & Pro */
+						esc_html__( 'Need multi-role 2FA, trusted devices, emergency recovery codes, or priority support? %s', 'forgehub-secure-admin' ),
+						'<a href="' . esc_url( $upgrade_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Priority Support & Pro', 'forgehub-secure-admin' ) . '</a>'
+					);
+					?>
+				</p>
 			<?php endif; ?>
 
 		</div>
