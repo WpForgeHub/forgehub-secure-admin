@@ -58,11 +58,27 @@
 
 ---
 
+## 📸 Admin Preview
+
+<p align="center">
+  <img src="assets/screenshot-1.png" alt="ForgeHub Secure Admin Guard WordPress Admin Settings" width="100%" />
+</p>
+
+---
+
 ## 🔧 Installation
 
 1. Upload the `forgehub-secure-admin` folder to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the **Plugins** menu in WordPress.
 3. Navigate to **Settings &rarr; Secure Admin** to configure your security preferences.
+
+---
+
+## 🔗 Links & Resources
+
+- **Plugin Page:** [https://wpforgehub.com/product/secure-admin/](https://wpforgehub.com/product/secure-admin/)
+- **Documentation & Help:** [wpforgehub.com/docs](https://wpforgehub.com/docs/)
+- **More Free WordPress Plugins:** [wpforgehub.com](https://wpforgehub.com/#products)
 
 ---
 
